@@ -1,0 +1,151 @@
+{
+    "charts": [
+      {
+        "id": "chart1",
+        "title": "Sample Bar Chart",
+        "type": "bar",
+        "description": "A bar chart comparing publication counts across organizations.",
+        "layout": {
+          "width": 800,
+          "height": 600,
+          "orientation": "vertical", 
+          "stacked": false,
+          "legend": true,
+          "gridlines": true
+        },
+        "dataSource": {
+          "apiEndpoint": "/api/v1/data/bar_chart",
+          "method": "GET",
+          "queryParameters": {
+            "entityType": "organizations",
+            "metric": "publications",
+            "yearRange": "2010-2020"
+          },
+          "responseFormat": {
+            "data": [
+              {
+                "category": "Organization A",
+                "value": 1500
+              },
+              {
+                "category": "Organization B",
+                "value": 1200
+              }
+            ],
+            "totalCount": 2,
+            "meta": {
+              "metricUnit": "count",
+              "lastUpdated": "2024-12-09T10:00:00Z"
+            }
+          }
+        },
+        "filters": [
+          {
+            "name": "Year Range",
+            "type": "range",
+            "field": "year",
+            "min": 2010,
+            "max": 2020,
+            "defaultValue": [2010, 2020]
+          },
+          {
+            "name": "Organizations",
+            "type": "dropdown",
+            "field": "organization",
+            "optionsApi": "/api/v1/filters/organizations",
+            "multiSelect": true
+          }
+        ],
+        "style": {
+          "font": {
+            "family": "Arial",
+            "size": 12,
+            "color": "#333"
+          },
+          "colors": ["#4CAF50", "#FFC107", "#2196F3"],
+          "border": {
+            "width": 1,
+            "color": "#ccc"
+          },
+          "backgroundColor": "#fff"
+        },
+        "caption": "Publication counts for organizations between 2010 and 2020.",
+        "info": "This bar chart compares the total publications across selected organizations over the given year range.",
+        "interactivity": {
+          "tooltip": true,
+          "zoom": true,
+          "clickable": true,
+          "hoverEffect": true
+        }
+      },
+      {
+        "id": "chart2",
+        "title": "Trend Line Chart",
+        "type": "line",
+        "description": "A line chart showing trends in funding over years for a selected organization.",
+        "layout": {
+          "width": 800,
+          "height": 400,
+          "lineType": "smooth",
+          "gridlines": true,
+          "legend": true
+        },
+        "dataSource": {
+          "apiEndpoint": "/api/v1/data/line_chart",
+          "method": "GET",
+          "queryParameters": {
+            "entityType": "organizations",
+            "metric": "funding",
+            "organizationId": 123,
+            "yearRange": "2010-2020"
+          },
+          "responseFormat": {
+            "data": [
+              { "x": 2010, "y": 500000 },
+              { "x": 2011, "y": 600000 },
+              { "x": 2012, "y": 650000 }
+            ],
+            "meta": {
+              "metricUnit": "USD",
+              "lastUpdated": "2024-12-09T10:00:00Z"
+            }
+          }
+        },
+        "filters": [
+          {
+            "name": "Organization",
+            "type": "dropdown",
+            "field": "organization",
+            "optionsApi": "/api/v1/filters/organizations",
+            "multiSelect": false
+          },
+          {
+            "name": "Year Range",
+            "type": "range",
+            "field": "year",
+            "min": 2010,
+            "max": 2020,
+            "defaultValue": [2010, 2020]
+          }
+        ],
+        "style": {
+          "font": {
+            "family": "Roboto",
+            "size": 12,
+            "color": "#444"
+          },
+          "lineColors": ["#FF5722"],
+          "backgroundColor": "#f9f9f9"
+        },
+        "caption": "Funding trends from 2010 to 2020 for Organization X.",
+        "info": "This line chart illustrates annual funding trends for the selected organization.",
+        "interactivity": {
+          "tooltip": true,
+          "zoom": true,
+          "clickable": false,
+          "hoverEffect": true
+        }
+      }
+    ]
+  }
+  

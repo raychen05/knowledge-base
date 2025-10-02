@@ -1,0 +1,170 @@
+{
+    "report": {
+      "metadata": {
+        "report_id": "unique_report_identifier",
+        "title": "Analytical Report Title",
+        "description": "A detailed description of the report's purpose and content",
+        "created_at": "2024-12-09T00:00:00Z",
+        "updated_at": "2024-12-09T12:00:00Z"
+      },
+      "filters": [
+        {
+          "filter_id": "report_level_filter_1",
+          "type": "dropdown",
+          "label": "Country",
+          "values": ["USA", "Canada", "Germany"],
+          "default": "USA",
+          "applies_to": "report"
+        }
+      ],
+      "sections": [
+        {
+          "section_id": "section_1",
+          "title": "Overview Section",
+          "description": "This section provides an overview of key metrics.",
+          "filters": [
+            {
+              "filter_id": "section_level_filter_1",
+              "type": "date_range",
+              "label": "Time Range",
+              "default": {"start": "2023-01-01", "end": "2023-12-31"},
+              "applies_to": "section"
+            }
+          ],
+          "layout": {
+            "columns": 3,
+            "rows": 2
+          },
+          "tiles": [
+            {
+              "tile_id": "tile_1",
+              "type": "chart",
+              "title": "Yearly Revenue Trend",
+              "description": "Displays yearly revenue over time.",
+              "api": {
+                "endpoint": "/api/v1/data/revenue-trend",
+                "method": "GET",
+                "parameters": {
+                  "date_range": {"start": "2023-01-01", "end": "2023-12-31"},
+                  "filters": ["country", "region"]
+                }
+              },
+              "indicators": [
+                {
+                  "id": "revenue",
+                  "label": "Revenue",
+                  "type": "numeric"
+                },
+                {
+                  "id": "profit",
+                  "label": "Profit",
+                  "type": "numeric"
+                }
+              ],
+              "main_entity": {
+                "type": "organization",
+                "id": "company_id",
+                "label": "Company Name"
+              },
+              "layout": {
+                "column_span": 2,
+                "row_span": 1
+              },
+              "filters": [
+                {
+                  "filter_id": "tile_level_filter_1",
+                  "type": "dropdown",
+                  "label": "Region",
+                  "values": ["North", "South"],
+                  "default": "North",
+                  "applies_to": "tile"
+                }
+              ]
+            },
+            {
+              "tile_id": "tile_2",
+              "type": "table",
+              "title": "Top Customers",
+              "description": "Table of top customers by revenue.",
+              "api": {
+                "endpoint": "/api/v1/data/top-customers",
+                "method": "POST",
+                "parameters": {
+                  "top_n": 10,
+                  "filters": ["country", "region"]
+                }
+              },
+              "indicators": [
+                {
+                  "id": "customer_name",
+                  "label": "Customer Name",
+                  "type": "string"
+                },
+                {
+                  "id": "revenue",
+                  "label": "Revenue",
+                  "type": "numeric"
+                },
+                {
+                  "id": "profit",
+                  "label": "Profit",
+                  "type": "numeric"
+                }
+              ],
+              "main_entity": {
+                "type": "customer",
+                "id": "customer_id",
+                "label": "Customer Name"
+              },
+              "layout": {
+                "column_span": 1,
+                "row_span": 1
+              },
+              "filters": []
+            }
+          ]
+        },
+        {
+          "section_id": "section_2",
+          "title": "Detailed Metrics",
+          "description": "This section contains detailed metrics.",
+          "filters": [],
+          "layout": {
+            "columns": 2,
+            "rows": 1
+          },
+          "tiles": [
+            {
+              "tile_id": "tile_3",
+              "type": "meta",
+              "title": "Data Summary",
+              "description": "A high-level summary of the data used in the report.",
+              "api": {
+                "endpoint": "/api/v1/data/summary",
+                "method": "GET",
+                "parameters": {}
+              },
+              "indicators": [
+                {
+                  "id": "total_records",
+                  "label": "Total Records",
+                  "type": "numeric"
+                },
+                {
+                  "id": "last_updated",
+                  "label": "Last Updated",
+                  "type": "timestamp"
+                }
+              ],
+              "main_entity": null,
+              "layout": {
+                "column_span": 2,
+                "row_span": 1
+              },
+              "filters": []
+            }
+          ]
+        }
+      ]
+    }
+  }

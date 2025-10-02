@@ -1,0 +1,40 @@
+
+
+spark_runtime_config:
+    spark.sql.shuffle.partitions:       400   #  Increase partitions for parallelism
+    spark.serializer:                   org.apache.spark.serializer.KryoSerializer   #  Efficient serialization
+    es.batch.size.entries:              10000   #  Bulk indexing size
+    es.batch.size.bytes:                10mb   #  Limit request size per batch
+    es.batch.write.refresh:             false   #  Disable auto-refresh for performance
+    es.index.auto.create:               false   #  Avoid index auto-creation overhead
+    es.nodes.wan.only:                  false   #  Use direct node communication
+    es.nodes:                           es-cluster-endpoint   #  Replace with ES cluster
+    es.port:                            9200   # Elasticsearch port
+
+
+spark_write_config:
+    format:                             org.elasticsearch.spark.sql #  Use Elasticsearch Spark connector
+    es.resource:                        esIndex #  Replace with your index name
+    es.nodes:                           es-cluster-endpoint #  Replace with ES cluster
+    es.port:                            9200  # Elasticsearch port
+    es.batch.write.retry.count:         10   # Retry failures
+    es.batch.write.retry.wait:          10s   # Wait between retries
+    es.mapping.id:                      document_id   # Use a field as ID to avoid duplicates
+
+
+
+spark_env_config:
+    spark.dynamicAllocation.enabled:       true  # Enable dynamic allocation
+    spark.dynamicAllocation.minExecutors:  20  # Minimum number of executors
+    spark.dynamicAllocation.maxExecutors:  80  # Maximum number of executors
+    spark.executor.memory:                 16g # Executor memory
+    spark.executor.cores:                  4  # Executor cores
+    spark.driver.memory:                   8g # Driver memory
+    spark.driver.cores:                    4 # Driver cores
+    spark.sql.shuffle.partitions:          400 # Increase partitions for parallelism
+    spark.serializer:                      org.apache.spark.serializer.KryoSerializer # Efficient serialization
+
+
+
+es.mapping:
+:
