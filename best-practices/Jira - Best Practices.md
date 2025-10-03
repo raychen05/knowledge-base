@@ -124,7 +124,7 @@ Jira ID: AGRA-1234
 
 
 
-### Practices for Efficient Collaboration
+### 10. Practices for Efficient Collaboration
 
 Use the Right EPIC and Story Structure
 * Link your tasks/stories to the correct EPIC and release (e.g., Q3).
