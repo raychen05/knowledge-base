@@ -102,7 +102,7 @@ This is a very common requirement in research-tech, where knowledge protection, 
 
 Would you like me to sketch a hybrid pipeline diagram (Local LLM + NER model + vector DB) so you can see how this fits into your research assistant system?
 
-![alt text](<Hybrid Local Academic Query Analysis Pipeline.png>)
+![alt text](<png/Hybrid Local Academic Query Analysis Pipeline.png>)
 
 
 

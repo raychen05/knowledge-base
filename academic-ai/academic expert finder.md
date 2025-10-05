@@ -100,7 +100,7 @@ Feature	Why Users Want It
 - A working prompt template?
 - An implementation plan using LangChain or Streamlit?
 
-![alt text](<Al-Powered Academic Expert Finder.png>)
+![alt text](<png/Al-Powered Academic Expert Finder.png>)
 
 ---
 
