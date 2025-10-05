@@ -493,7 +493,7 @@ Here’s a comprehensive LLM prompt designed to extract the most important resea
 ### 🧠🔍 LLM Prompt: Extract Key Information from Academic Papers
 
 
-
+```plaintext
 You are an expert research assistant AI.
 
 Your task is to analyze academic papers and extract structured summaries of the most important information researchers need for literature review, comparison, and synthesis.
@@ -551,6 +551,8 @@ Output format (structured JSON):
   "lay_summary": "..."
 }
 
+
+```
 
 
 ---
