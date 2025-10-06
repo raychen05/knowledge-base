@@ -1,5 +1,5 @@
 
-## System Design - 2
+## System Design - Topics
 
 Great image! It’s a list of system design practice problems (常见面试题目) with different difficulty levels (“容易的” = easy, “中等的” = medium, “困难的” = hard). I’ll go through each visible question from the image and provide details on what interviewers expect you to cover for each one.
 
