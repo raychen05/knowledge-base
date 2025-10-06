@@ -1,5 +1,7 @@
 ## Comprehensive, categorized list of critical information types 
 
+
+
 Here is a comprehensive, categorized list of critical information types that can be extracted from an academic article’s title and abstract, designed for cross-disciplinary coverage (STEM, medicine, humanities, social sciences, etc.). This extends beyond your initial list and supports deep academic search and intelligent summarization.
 
 ---
