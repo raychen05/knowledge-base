@@ -2,14 +2,14 @@
 
 
 
-![alt text](wos-search-overall-image.png)
+![alt text](png/wos-search-overall-image.png)
 
 
-![alt text](wos-search-client-image.png)
+![alt text](png/wos-search-client-image.png)
 
 
-![alt text](wos-search-data-image.png)
+![alt text](png/wos-search-data-image.png)
 
 
 
-![alt text](wos-daily-load-image.png)
+![alt text](png/wos-daily-load-image.png)

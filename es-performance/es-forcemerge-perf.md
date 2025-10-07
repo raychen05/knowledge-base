@@ -2,7 +2,7 @@
 
 ---
 
-![alt text](forcemerge-image.png)
+![alt text](png/forcemerge-image.png)
 
 
 ---

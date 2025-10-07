@@ -5,11 +5,11 @@ This is a resource usage chart from Datadog for the data node during Elasticsear
 
 
 
-![alt text](search-overall-image.png)
+![alt text](png/search-overall-image.png)
 
 
-![alt text](search-data-image.png)
+![alt text](png/search-data-image.png)
 
 
 
-![alt text](search-client-image.png)
+![alt text](png/search-client-image.png)

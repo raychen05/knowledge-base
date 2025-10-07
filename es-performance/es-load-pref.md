@@ -7,7 +7,7 @@
 Based on the resource usage charts from Datadog during data loading onto a 40-node Elasticsearch cluster, here are the key observations and improvement recommendations:
 
 
-![alt text](load-image.png)
+![alt text](png/load-image.png)
 
 ---
 
