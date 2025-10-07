@@ -1,40 +1,114 @@
 ## Processing a Small Subset on Large Delta Tables 
 
 
-This is a common scenario in incremental ETL pipelines on large Delta tables (80M+ rows) when processing a small subset of keys (~100K).
+Good question 👌 — this is a very common scenario in Delta Lake pipelines:
+
+You have a very large Delta table (80M+ rows), and for incremental processing, you only need to process a subset of records identified by UIDs (1 M – 10 M), typically coming from an upstream change table, Kafka stream, or staging area.
+
+👉 The key is to avoid reading all 80M rows into a Spark DataFrame unnecessarily.
+
+Here’s a breakdown of efficient patterns you can use, depending on your infrastructure 👇
+
 
 
 **Key principles:**
 - Avoid scanning all 80M rows.
 - Use Spark’s broadcast join and data skipping/Z-Ordering to reduce shuffle and I/O.
 
-**Efficient strategy:**
-
----
 
 **Scenario**
 
 - Main Delta table: `fact_table` (~80M rows)
-- Incremental subset: `update_table` (~100K rows), e.g., changed entity keys
+- Incremental subset: `update_table` (1 M – 10 M rows), e.g., changed entity keys
 - Goal: Efficiently join/filter `fact_table` with `update_table` to process only relevant records
 
 ---
 
-### Step 1: Cache and broadcast `update_table`
+### 🧠 1: Cache and broadcast `update_table`
 
-Since `update_table` is small (<100K rows), Spark can broadcast it to all worker nodes, preventing shuffling of the large `fact_table`.
+- Use DataFrame.join with broadcast() if the UID subset fits in memory (1 M is usually fine)
+
+If your UID subset is reasonably small (≤ 10 M is often OK on a decent cluster), the most efficient pattern is to:
+
+- 	Read only the UID subset into a DataFrame.
+- 	Broadcast join it against the large Delta table to avoid a full shuffle.
+
+
+Since `update_table` is small (≤ 10 M rows), Spark can broadcast it to all worker nodes, preventing shuffling of the large `fact_table`.
 
 ```python
-from pyspark.sql.functions import broadcast
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.DataFrame
 
-update_df = spark.read.format("delta").load("/path/to/update_table")
-update_df = update_df.cache()    # optional but helps if reused
+// Subset of UIDs (incremental set), e.g., from S3 or another delta table
+val utDF = spark.read.format("delta").load("/mnt/delta/update_table")
+
+// Optional: select only UID column if you only need filtering
+val utUidDF = utDF.select("uid").distinct()
+
+// Read the large delta table
+val baseDF = spark.read.format("delta").load("/mnt/delta/fact_table")
+
+// Broadcast the UID subset to avoid shuffle
+val filteredDF = baseDF.join(
+  broadcast(utUidDF),
+  Seq("uid"),
+  "inner"
+)
+
+// Now process only the matched records
+// e.g., transform, merge, write, etc.
 ```
+
+
+👉 Why this works efficiently:
+- 	Spark sends the UID subset to all executors as a small hash table.
+- 	Each executor scans its portion of the Delta table and filters locally, no large shuffle.
+- 	Reading the large table is parallelized and filtered immediately.
+-	No shuffle on the large fact_df.
+-	Only relevant rows from fact_df are processed.
+
+👉 Best for:
+- 	1 M – 10 M UID list.
+- 	You can afford to broadcast this once per incremental run.
+-   With 1M keys, this is much faster than shuffling 80M rows.
+
+---
+
+### 🧠 2. Use IN / SEMI JOIN filtering when you only need to filter by UID, not join extra columns
+
+If you only need to select records in the large table matching a set of UIDs, a left semi join is even cheaper than a full inner join:
+
+```scala
+val filteredDF = baseDF.join(
+  broadcast(utUidDF),
+  Seq("uid"),
+  "left_semi"
+)
+```
+
+✅ This keeps only rows in baseDF with a matching uid in utUidDF.
+
+No extra columns pulled in → less shuffle, less serialization.
+
+---
+
+✅  Use DataFrame.filter with isin() for very small UID subsets
+
+If the subset is small (e.g., < 50 K), you can even collect to the driver and use .filter(col("uid").isin(...)):
+
+```scala
+val uidSet = utUidDF.collect().map(_.getString(0))
+val filteredDF = baseDF.filter(col("uid").isin(uidSet: _*))
+```
+
+⚠️ Don’t do this for millions of UIDs — you’ll blow up the driver memory.
 
 
 ---
 
-### ✅ Step 2: Push filters down to Delta read
+
+###  🧠 3: Push filters down to Delta read
 
 If fact_table is partitioned, always push filters on the partition column first to prune files before the join.
 
@@ -50,30 +124,78 @@ fact_df = (
 
 ---
 
-### ✅ Step 3: Join using broadcast(update_df) on the key
+#### 🧠 4. Use Z-Ordering or Partitioning by UID or UID prefix to prune data at scan time
 
-Suppose the join key is id:
+For recurring queries that filter by uid, you can physically optimize the Delta table to minimize the amount of data read:
 
-```python
-joined_df = (
-    fact_df.join(
-        broadcast(update_df),  # 🚀 small table broadcasted
-        on="id",
-        how="inner"
-    )
-)
+
+#### Option A — Partition by UID prefix (e.g., hash)
+
+- 	Add a derived column, e.g., uid_bucket = uid % 1000.
+- 	Partition the Delta table by uid_bucket.
+- 	During incremental loads, pre-compute which buckets are needed and only read those partitions.
+
+```scala
+val neededBuckets = utUidDF
+  .withColumn("uid_bucket", col("uid") % 1000)
+  .select("uid_bucket").distinct().collect().map(_.getInt(0))
+
+val baseDF = spark.read
+  .format("delta")
+  .load("/mnt/delta/large_table")
+  .where(col("uid_bucket").isin(neededBuckets: _*))
+
+val filteredDF = baseDF.join(broadcast(utUidDF), Seq("uid"), "inner")
+```
+✅ Spark prunes entire partitions at read time — very fast if partitioning is well-designed.
+
+
+#### Option B — Z-ORDER by UID
+
+If this join happens frequently, Z-ORDERing your Delta table on the join key (id) will greatly improve data skipping, meaning Spark will read fewer data files for matching keys:
+
+If partitioning by UID isn’t practical, Z-Ordering is a good compromise:
+
+```sql
+OPTIMIZE large_table ZORDER BY (uid)
 ```
 
-This ensures:
--	update_df is sent to each worker once.
--	No shuffle on the large fact_df.
--	Only relevant rows from fact_df are processed.
+- 	Spark reorganizes Parquet files internally to cluster rows with similar UIDs.
+- 	Future filters by UID can skip entire files using data skipping statistics.
+- 	Combine with broadcast join for best effect.
 
-👉 With 100K keys, this is much faster than shuffling 80M rows.
+This clusters related rows together in fewer data files, so Spark can skip non-relevant files during the read.
+
+💡 Best for repeated incremental jobs, not for one-time.
 
 ---
 
-### ✅ Step 4: Optional — Pre-filter fact_df using update_df keys
+### 🧠 5. Use table_changes / CDF if UT comes from recent updates
+
+If the UT set corresponds to recent changes in the Delta table (e.g., last hour/day), enable Change Data Feed:
+
+```sql
+ALTER TABLE large_table SET TBLPROPERTIES (delta.enableChangeDataFeed = true);
+```
+
+Then read only changes since last processed version:
+
+```scala
+val changesDF = spark.read
+  .format("delta")
+  .option("readChangeFeed", "true")
+  .option("startingVersion", lastProcessedVersion)
+  .table("large_table")
+
+val filteredDF = changesDF.join(broadcast(utUidDF), Seq("uid"), "inner")
+```
+
+✅ You avoid scanning the entire large table entirely — ideal if UT is aligned with upstream changes.
+
+
+---
+
+### 🧠  6 Optional — Pre-filter fact_df using update_df keys
 
 If the join key has good selectivity and is indexed / sorted, you can pre-filter using IN or semi join. Example:
 
@@ -88,7 +210,6 @@ filtered_fact_df = fact_df.join(
 )
 ```
 
-
 Or using a semi-join (less overhead):
 
 ```python
@@ -101,26 +222,11 @@ filtered_fact_df = fact_df.join(
 
 This is especially efficient if the id column is indexed through Z-ORDER or clustering (next step).
 
---
-
-### ✅ Step 5: Z-ORDER the Delta table by join key (optional but powerful)
-
-If this join happens frequently, Z-ORDERing your Delta table on the join key (id) will greatly improve data skipping, meaning Spark will read fewer data files for matching keys:
-
-```sql
-OPTIMIZE fact_table
-ZORDER BY (id)
-```
-
-This clusters related rows together in fewer data files, so Spark can skip non-relevant files during the read.
-
-💡 Best for repeated incremental jobs, not for one-time.
-
 
 ---
 
 
-### ✅ Step 6: Tune Shuffle Partitions
+###  🧠 7  Tune Shuffle Partitions
 
 Since your incremental set is small, avoid creating thousands of shuffle partitions unnecessarily:
 
@@ -130,9 +236,10 @@ spark.conf.set("spark.sql.shuffle.partitions", "200")
 
 You can adjust 200 to a lower number if the incremental workload is tiny. This prevents Spark from over-partitioning small outputs.
 
+
 ---
 
-### ✅ Step 7: Optionally, Use Bloom Filters (Delta feature)
+### 🧠 8  Optionally, Use Bloom Filters (Delta feature)
 
 If you have a large Delta table and the join key is highly selective, you can create a Bloom filter index on the join key column. Spark will then skip files that definitely don’t contain relevant keys:
 
@@ -146,6 +253,9 @@ Then Spark will use this index during joins/filter to avoid reading unnecessary 
 
 📊 Summary Table
 
+
+**Table-1**
+
 | Technique               | Purpose                           | Benefit                                 |
 |-------------------------|-----------------------------------|-----------------------------------------|
 | Broadcast join          | Avoid shuffling 80M rows          | Huge performance boost                  |
@@ -155,6 +265,29 @@ Then Spark will use this index during joins/filter to avoid reading unnecessary 
 | Shuffle partitions tuning| Match parallelism to data size   | Avoid overhead                          |
 | Bloom filter index      | File skipping for selective filters| Efficient for point lookups             |
 
+
+**Table-2**
+
+| Approach              | Best for UID size   | Large table read                | Shuffle         | Notes                                 |
+|-----------------------|---------------------|-------------------------------|-----------------|---------------------------------------|
+| Broadcast join        | ≤ 10 M              | Full scan (parallel)           | ❌ Avoided      | Fast if broadcast fits in memory      |
+| Left semi join        | ≤ 10 M              | Full scan (parallel)           | ❌ Avoided      | Cheaper than inner join               |
+| isin() filter         | ≤ 50 K              | Full scan (parallel)           | ❌              | Simple, but driver memory intensive   |
+| Partition pruning     | Any                 | ✅ Only relevant partitions     | ❌              | Requires partition design upfront     |
+| Z-Ordering            | Any                 | ✅ File skipping                | ❌              | Best for repeated UID filtering       |
+| Change Data Feed (CDF)| UT = recent changes | ❌ Only changes                 | ❌              | Most efficient if applicable          |
+
+---
+
+🚀 Recommended Hybrid Strategy
+
+For your case (UT = 1 M – 10 M, large table = 80 M):
+
+1.	Broadcast the UT UID subset.
+2.	Z-ORDER the large table by uid to maximize pruning.
+3.	Use left semi join to filter efficiently.
+4.	If possible, combine with partitioning by hash buckets to avoid full scans.
+5.	For future incremental runs, consider CDF if the UT represents recent changes.
 
 ---
 
