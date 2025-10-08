@@ -1,4 +1,4 @@
-##  Maintain stable, incremental sort order without reassigning sort values 
+##   Sorting Authors - Maintain stable, incremental sort order without reassigning sort values 
 
 
 Good question — this is a very common requirement when working with large author datasets and needing a stable, incremental sort order without reassigning sort values to the entire 30+ million records.

@@ -1,6 +1,6 @@
 
 
-##  Maintain stable, incremental sort order without reassigning sort values 
+##  Sorting Organizations - Maintain stable, incremental sort order without reassigning sort values 
 
 
 Got it! For organizations and departments, you want:
