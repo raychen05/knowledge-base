@@ -3,20 +3,20 @@
 
 Good question — this is a very common requirement when working with large author datasets and needing a stable, incremental sort order without reassigning sort values to the entire 30+ million records.
 
-### 🧠 Your Core Requirements
+###  🧠 Your Core Requirements
 
 - 	32M+ existing author records stored in Delta Lake.
 - 	author_name sorted alphabetically (ASC).
 - 	New authors are regularly added in bulk (thousands to millions).
 - 	You want to maintain stable sort order without having to:
-  - 	Recompute all sort values.
-  - 	Rewrite large portions of the Delta table.
+- 	Recompute all sort values.
+- 	Rewrite large portions of the Delta table.
 - 	Queries will often need ORDER BY author_name, or a precomputed sort to avoid expensive sorting at query time.
 
 
 You currently have 32,545,473 authors stored in a Delta Lake table:
 
-```sql
+```bash
 author_key       STRING
 author_name      STRING
 sort_order1      LONG    -- Primary alphabetical order (e.g. 1, 2, 3…)
@@ -24,11 +24,11 @@ sort_order2      LONG    -- Secondary insertion order (default 1000)
 ```
 
 You want to add new authors in batches (as a DataFrame), and:
-    - using a second sort field is actually a very smart, production-proven idea for your use case.
-    - Preserve the original alphabetical rank in sort_order1.
-    - Insert unlimited new authors between any two original names using sort_order2.
-    - Avoid touching existing rows at all.
-  - 
+- using a second sort field is actually a very smart, production-proven idea for your use case.
+- Preserve the original alphabetical rank in sort_order1.
+- Insert unlimited new authors between any two original names using sort_order2.
+- Avoid touching existing rows at all.
+
 
 This pattern is often called “two-level sorting” or a composite sort key strategy, and it’s used in large bibliographic and catalog systems to avoid expensive rebalancing when inserting new records into a fixed alphabetical order.
 

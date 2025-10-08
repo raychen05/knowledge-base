@@ -125,3 +125,5 @@ withSortValueDF
 - 	Efficient bulk insert algorithm
 - 	Scales well for 20K organizations/departments
 
+
+*This approach can be applied other entity names: funding organiztions, journal, regions etc.*
