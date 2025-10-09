@@ -68,7 +68,7 @@ NER is better if the goal is to extract key information from questions and then 
 ---
 
 
-### Prompt  for Quation Analysis
+### Prompt  for Question Analysis
 
 ```plaintext
 
