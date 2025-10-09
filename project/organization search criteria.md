@@ -44,6 +44,7 @@ We’ll build the logic in steps:
 ### 🔧 Final Working Script:
 
 #### 1. Final version
+
 ```json
 {
   "script_score": {
@@ -209,7 +210,7 @@ We’ll build the logic in steps:
 
 ---
 
-### Enahnced Version - Up-to-datee
+### Enahnced Version - Up-to-date
 
 ```json
 {

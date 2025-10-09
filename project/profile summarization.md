@@ -161,6 +161,7 @@ Here are the definitions and descriptions for the fields in an author’s profil
 '''plaintext
 As an expert in academic management and research, your task is to summarize an academic researcher's profile based on the background information provided. Ensure the summary is in JSON format, with all tags in lowercase. The profile should cover the following major areas:
 
+```json
 {
   "summary": "A concise overview of the researcher's professional journey and contributions to their field.",
   
@@ -218,7 +219,7 @@ As an expert in academic management and research, your task is to summarize an a
     "breakdown_topics": "A breakdown of the most popular topics cited from this author's works.",
   }
 }
-   
+```
 
 Backrgound information: {{meta_data}}
 
