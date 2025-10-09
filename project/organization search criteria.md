@@ -205,3 +205,77 @@ We’ll build the logic in steps:
 - Penalizes distance
 - Flexible for single and multi-term queries
 - Clean tiered scoring
+
+
+---
+
+### Enahnced Version - Up-to-datee
+
+```json
+{
+    "_source": [
+        "preferredName", "itemPGUID"
+    ],
+    "from": 0,
+    "size": 20,
+    "query": {
+        "function_score": {
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "term": {
+                                "itemStatus": 3
+                            }
+                        },
+                        {
+                            "prefix": {
+                                "preferredName": {
+                                    "value": "harvard",
+                                    "case_insensitive": true,
+                                    "boost": 1
+                                }
+                            }
+                        }
+                    ]
+                }
+            },
+            "functions": [ 
+                {
+                    "script_score": {
+                        "script": {
+                            "source": "String fieldValue = doc[params.field].value.replace(' of ', ' ').toLowerCase(); String[] fieldTokens = /\\s+/.split(fieldValue.trim()); String queryPhrase = String.join(' ', params.terms).toLowerCase().replace(' of ', ' '); String reversedQuery = ''; for (int i = params.terms.length - 1; i >= 0; i--) { reversedQuery += params.terms[i].toLowerCase(); if (i > 0) reversedQuery += ' '; }  if (fieldValue.equals(queryPhrase)) return 0; if (fieldValue.startsWith(queryPhrase + ' ')) return fieldTokens.length; if (fieldValue.contains(' ' + queryPhrase + ' ') || fieldValue.endsWith(' ' + queryPhrase)) {int firstMatchPos = -1;String term = params.terms[0].toLowerCase();for (int i = 0; i < fieldTokens.length; i++) {if (fieldTokens[i].toLowerCase().startsWith(term)) { firstMatchPos = i; break;}} return 200 + (firstMatchPos + 1) * 10 + fieldTokens.length;} if (fieldValue.contains(' ' + reversedQuery + ' ') || fieldValue.startsWith(reversedQuery + ' ')) { int reversedPos = fieldValue.indexOf(reversedQuery); return 500 + (reversedPos + 1) * 10 + fieldTokens.length; } int matchedTerms = 0; int[] positions = new int[params.terms.length]; for (int i = 0; i < params.terms.length; i++) positions[i] = -1;  for (int i = 0; i < fieldTokens.length; i++) { for (int j = 0; j < params.terms.length; j++) { if (fieldTokens[i].equals(params.terms[j].toLowerCase())) { matchedTerms += 1; positions[j] = i; break; } } }  int minPos = Integer.MAX_VALUE; int maxPos = Integer.MIN_VALUE; for (int p : positions) { minPos = (int) Math.min(minPos, p); maxPos = (int)Math.max(maxPos, p); }  int distance = maxPos - minPos; return 1000 + distance * 10 + fieldTokens.length;",
+                            "params": {
+                                "terms": ["harvard"],
+                                "field": "preferredName.norm"
+                            }
+                        }
+                    },
+                    "weight": 1
+                 }
+            ],
+            "score_mode": "sum",
+            "boost_mode": "replace"
+        }
+    },
+    "sort": [
+        {
+            "_score": {
+                "order": "asc"
+            }
+        },
+        {
+            "wos_count": {
+                "order": "desc"
+            }
+        },
+        {
+            "preferredName.norm": {
+                "order": "asc"
+            }
+        }
+    ],
+    "track_total_hits": 2147483647
+}
+
+```
