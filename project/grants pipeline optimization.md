@@ -1015,7 +1015,8 @@ Example:
 df.write.bucketBy(100, "personid").sortBy("personid").saveAsTable("bucketed_fct_person")
 ```
 Then when joining:
-``python
+
+```python
 # Spark will automatically do local joins (no shuffle)
 bucketed_fct_person.join(other_df, "personid")
 ```
