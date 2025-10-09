@@ -1,4 +1,6 @@
-### Optimization of Grants Pipeline
+
+## Optimization of Grants Pipeline
+
 
 
 ### 1. get_relationship_grant_organizaiton()
@@ -33,7 +35,7 @@
 
 ⚡ Summary of Key Actions:
 
-# Optimization
+**Optimization**
 
 | **Why**                                      | **Explanation**          |
 |----------------------------------------------|--------------------------|
@@ -169,7 +171,7 @@ DAG Flow
 ✅ Summary of Practical Actions
 
 
-# Step and Action
+**Step and Action**
 
 | **Step**       | **Action**                                        |
 |----------------|---------------------------------------------------|
@@ -209,7 +211,7 @@ DAG Flow
 ---
 
 
-#### 2. get_relationship_grant_funder
+### 2. get_relationship_grant_funder
 
 
 Summary of Key Problems:
@@ -238,7 +240,7 @@ Recommendations for Optimizing:
 ⚙ Key Optimizations Explained:
 
 
-# Before and After
+**Before and After**
 
 | **Before**                                        | **After**                                                          |
 |---------------------------------------------------|--------------------------------------------------------------------|
@@ -261,7 +263,7 @@ Recommendations for Optimizing:
 ⚙ Aggressive Optimizations Checklist:
 
 
-# Feature and Why
+**Feature and Why**
 
 | **Feature**                                      | **Why**                                                             |
 |--------------------------------------------------|---------------------------------------------------------------------|
@@ -290,7 +292,6 @@ Memory usage drops a lot too because less shuffle = less JVM overhead.
 
 
 🎯 Summary DAGs
-
 
 
 ``` text
@@ -356,7 +357,7 @@ By applying this config to your jobs, you should see better performance, less sh
 
 ---
 
-## 3. create_df_grantdata()
+### 3. create_df_grantdata()
 
 The code provided has several areas that could benefit from optimization, particularly in terms of minimizing shuffling, reducing memory usage, and improving overall runtime performance. Below, I will first identify the key performance problems and then provide an optimized version of the code.
 
@@ -387,10 +388,11 @@ Key Optimizations:
 
 ---
 
-## 4. create_grant_ri()
+### 4. create_grant_ri()
 
 
-Key Performance Issues
+**Key Performance Issues**
+
  1. Shuffle Partitions: The spark.sql.shuffle.partitions configuration is set multiple times, which can cause inefficient repartitioning and excessive shuffling. The number of shuffle partitions should ideally be optimized based on the data size rather than being hardcoded.
  2. Repartitioning: Repartitioning too early or too often can lead to unnecessary shuffle operations. It is better to ensure that repartitioning is done optimally, only when necessary and after data transformations are done.
  3. Use of .toJSON(): The .toJSON() method generates a large number of small partitions, which can cause a lot of shuffle. Writing data directly with .write (without .toJSON()) could help reduce the shuffle overhead.
@@ -400,8 +402,8 @@ Key Performance Issues
 
 
 
+**Key Changes:**
 
-Key Changes:
  1. Optimal Shuffle Partitions: Instead of setting spark.sql.shuffle.partitions to a hardcoded value like 400, the code now calculates it dynamically based on the available parallelism (spark.sparkContext.defaultParallelism). This ensures optimal shuffle partitions for your environment.
  2. Caching UDM Data: If the UDM data is being used in multiple places, it is cached to avoid recomputing it each time it is referenced.
  3. Repartitioning Only When Necessary: The repartitioning is now conditional based on the available cores in the cluster. This reduces the shuffle overhead if there are fewer cores than partitions.
@@ -411,25 +413,30 @@ Key Changes:
 
 ---
 
-## 5. get_organization()
+### 5. get_organization()
 
-### Option-1
+**Option-1**
 
 Key Performance Problems Identified:
 
 1. Too many joins:
 - You’re joining a lot of heavy tables (v_map tables) one after another, many with groupBy/collect_set aggregations, before persisting any intermediate result.
 - Each join re-triggers lineage, causing Spark to recompute large stages and shuffle huge data.
+
 2. No caching:
 - After expensive computations like .groupBy().agg(), you’re immediately joining again without caching.
 - This causes Spark to recompute that aggregation every time it is referenced — extremely wasteful.
+
 3. Unnecessary .orderBy early:
 - You’re ordering df_v_institution_profile before the final use. orderBy triggers a full shuffle across all partitions early.
+
 4. Too many .distinct() without understanding data size:
 - distinct forces shuffle. Should be avoided unless really needed.
+
 5. Unnecessary repartitioning or wrong partition sizes:
 - No explicit repartition() or coalesce() after heavy joins.
 - Writing to Parquet after a huge join without rebalancing partitions = small files or skew.
+
 6. Memory bloat in collect_set:
 - collect_set can create large arrays in driver memory if the set is big.
 
@@ -438,7 +445,7 @@ Key Performance Problems Identified:
 Optimization Strategy:
 
 
-# Problem and Fix
+**Problem and Fix**
 
 | **Problem**                           | **Fix**                                                     |
 |---------------------------------------|-------------------------------------------------------------|
@@ -453,7 +460,7 @@ Optimization Strategy:
 🔥 Key Optimizations Done:
 
 
-# Optimization Strategies
+**Optimization Strategies**
 
 | **#** | **Optimization Strategy**                 | **Description**                                                                                          |
 |-------|-------------------------------------------|----------------------------------------------------------------------------------------------------------|
@@ -536,9 +543,8 @@ If this logic is part of a larger pipeline:
 ### Option-2: An even faster version using Broadcast Joins and Dynamic Partition Pruning (DPP)
 
 
-
-
 🔥 Key Performance Problems in Your Code
+
  1. Expensive Cross Join:
  - You are doing a .crossJoin between f_institution_reputation and a groupBy-limit result. This will produce all combinations (Cartesian product) and then filter. Extremely heavy shuffle.
  2. Repeated .select and .distinct and .join:
@@ -555,7 +561,8 @@ If this logic is part of a larger pipeline:
  - .dense_rank() without .partitionBy just .orderBy means full sort of the dataset — slow and memory intensive.
 
 
-# 🔥 Key Performance Problems in Your Code
+🔥 Key Performance Problems in Your Code
+
 
 | **#** | **Problem**                                             | **Description**                                                                                                                                 |
 |-------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -624,7 +631,7 @@ Main goals:
 
 🧠 What’s Happening Here
 
-# Performance Improvements
+**Performance Improvements**
 
 | **Before**                          | **After**                                               |
 |-------------------------------------|---------------------------------------------------------|
@@ -807,15 +814,15 @@ In a real Spark UI (Stages → Tasks → DAG visualization), you would see:
 ---
 
 
-## 6.  create_df_ut()
+### 6.  create_df_ut()
 
 
-### Option-1
+**Option-1**
 
 🚨 Major Performance Problems in Your Code
 
 
-# Area and Issues
+**Area and Issues**
 
 | **Area**                            | **Issue**                                                                                                        |
 |-------------------------------------|------------------------------------------------------------------------------------------------------------------|
@@ -831,7 +838,7 @@ In a real Spark UI (Stages → Tasks → DAG visualization), you would see:
 
 🛠 Optimization Strategies
 
-# Area and Solution
+**Area and Solution**
 
 | **Area**                     | **Solution**                                                                                         |
 |------------------------------|-----------------------------------------------------------------------------------------------------|
@@ -844,6 +851,7 @@ In a real Spark UI (Stages → Tasks → DAG visualization), you would see:
 
 
 🔥 Key Improvements
+
  - NO unnecessary parquet writes/reads.
  - Broadcast joins on small tables to avoid huge shuffles.
  - Reduced explode + groupBy shuffle cost with filtering early.
@@ -862,13 +870,13 @@ After optimization:
 
 
 
-### Option-2:  advanced optimization
+**Option-2**:  advanced optimization
 
 
 ✅ Best Optimization Principles:
 
 
-# Problem and Optimization
+**Problem and Optimization**
 
 | **Problem**                  | **Optimization**                                                                                 |
 |------------------------------|--------------------------------------------------------------------------------------------------|
@@ -884,7 +892,7 @@ After optimization:
 📊 Performance Comparison Table
 
 
-# Step-by-Step Optimization
+**Step-by-Step Optimization**
 
 | **Step**                     | **Before (Original Code)**                           | **After (Optimized Code)**                                      |
 |------------------------------|------------------------------------------------------|------------------------------------------------------------------|
@@ -904,7 +912,7 @@ After optimization:
 To make it even faster based on your new optimized code, here are the best Spark configurations:
 
 
-# Spark Settings and Their Values
+**Spark Settings and Their Values**
 
 | **Setting**                                   | **Value**                | **Why**                                                        |
 |-----------------------------------------------|--------------------------|---------------------------------------------------------------|
@@ -1018,10 +1026,9 @@ bucketed_fct_person.join(other_df, "personid")
 
 
 
-
 ⚡ Summary of Advanced Tricks
 
-# Optimization Techniques
+**Optimization Techniques**
 
 | **Technique**      | **When to Use**                                | **Benefit**                  |
 |--------------------|------------------------------------------------|------------------------------|
