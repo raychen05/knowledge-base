@@ -5,7 +5,7 @@
 
 #### 1. Percentage Aggregation 
  
- ```json
+```json
 "THE_90_PERCENTILE_DOCS": { 
   "percentage": { 
     "field": "wos.percentile_esi", 
@@ -29,7 +29,7 @@ new ElasticPercentageAggregation() 
  
 #### 2. Quartile Aggregation 
  
- ```json 
+```json 
 "JOURNAL_QUARTILE": { 
   "ca_quartile": { 
     "field": "docs_key_latest", 
@@ -53,7 +53,7 @@ new ElasticQuartileAggregation() 
  
 #### 4. Ratio Aggregation 
  
- ```json 
+```json 
 "PERCENTILE_QA1": { 
   "ca_ratio": { 
     "missing_num": 0, 
@@ -107,7 +107,7 @@ new ElasticEncodedMetricAggregation() 
 
 #### 5. Range Aggregation – Impact Profile  
 
- ```json
+```json
   "impact_profile": { 
     "range": { 
       "field": "wos.nci_wos", 
@@ -139,7 +139,7 @@ new ElasticEncodedMetricAggregation() 
 
 ####  6. Meta Aggregation 
  
- ```json 
+```json 
 "INSTITUTION_FULL_NAME": { 
   "scripted_metric": { 
     "init_script": { 
@@ -167,7 +167,7 @@ new ElasticMetaAggregation() 
       .name("INSTITUTION_FULL_NAME") 
     .field("organizations.institution_full_name") 
     .metrics("term"))); 
- ``` 
+``` 
 
 
 #### 7. Filters Aggregation 
@@ -252,7 +252,7 @@ new ElasticFiltersAggregation() 
     ], 
     "exclude": [] 
   } 
- ``` 
+``` 
  
   
 ```java
