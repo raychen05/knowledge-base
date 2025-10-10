@@ -470,6 +470,46 @@
 ---
 
 
+### A Visual Knowledge Map
+
+Here’s the visual knowledge map showing how the 7 key stakeholder groups interconnect through shared AI use case themes — like innovation, collaboration, policy strategy, and research quality assurance.
+
+
+![alt text](png/knowledge_map_image.png)
+
+
+---
+
+
+### Cross-stakeholder Summary Matrix
+
+![alt text](png/cross-stakeholder.png)
+
+Here’s the cross-stakeholder summary matrix comparing overlaps and unique focus areas across the eight major academic ecosystem actors.
+
+- ✅ Heatmap above shows shared AI priorities (dark = strong overlap)
+- ✅ Table lists where each group is active (1 = relevant, 0 = less relevant)
+
+This matrix lets you quickly see:
+
+- *Shared domains*: “Research Discovery & Innovation” and “Collaboration & Networking” are almost universal.
+
+- *Unique domains*:
+  - PhD Students → Mentorship & Skill development
+  - Funding Agencies & Policy Bodies → Grant management & Policy analytics
+  - Publishers & Editors → Quality assurance focus
+  - Industry R&D → Strong overlap across innovation and collaboration, weaker on mentorship.
+
+Would you like me to produce a summary report (text + visual) describing:
+
+- common intersections,
+- distinctive needs per stakeholder, and
+- AI opportunity gaps across the ecosystem? 
+
+
+
+---
+
 ##  Toolchain Blueprint - Top 20 AI Use Cases
 
 
