@@ -15,9 +15,14 @@ Navigate to your project directory and create a new virtual environment using pi
 ```bash
     cd /path/to/your/project
     pipenv install
+
+    export PIPENV_IGNORE_VIRTUALENVS=1
+    export PIPENV_VENV_IN_PROJECT=1
 ```
 
 This will create a Pipfile and Pipfile.lock in your project directory.
+
+
 
 
 #### Step 3: Install Dependencies
@@ -25,6 +30,11 @@ This will create a Pipfile and Pipfile.lock in your project directory.
 After setting up the virtual environment, install the necessary packages for your FastAPI service:
 
 ```bash
+    pipenv --rm  # remove old env
+    pipenv install
+
+    pipenv run pip install -r requirements.txt
+    
     pipenv install fastapi uvicorn
 ```
 This will install FastAPI and Uvicorn for serving the application. You can add other packages as required.
