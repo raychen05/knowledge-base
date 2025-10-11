@@ -15,7 +15,7 @@
     "comparator": "lte" 
   } 
 } 
-``` 
+```
  
 ```java
 new ElasticPercentageAggregation() 
@@ -25,7 +25,7 @@ new ElasticPercentageAggregation() 
 .thresholds(Arrays.asList(1.0, 2.0)); 
 ```
 
-
+---
  
 #### 2. Quartile Aggregation 
  
@@ -39,8 +39,8 @@ new ElasticPercentageAggregation() 
     "default_quartile": 0 
   } 
 }   
-``` 
-
+```
+ 
 ```java
 new ElasticQuartileAggregation() 
         .name("JOURNAL_QUARTILE") 
@@ -48,10 +48,13 @@ new ElasticQuartileAggregation() 
         .metrics("sum") 
         .indicator("q1") 
         .includes(Arrays.asList(1L, 2L, 3L)); 
-``` 
 
- 
-#### 4. Ratio Aggregation 
+```
+
+---
+
+
+#### 3. Ratio Aggregation 
  
 ```json 
 "PERCENTILE_QA1": { 
@@ -74,9 +77,9 @@ new ElasticRatioAggregation() 
         .metricsNum("sum") 
         .metricsDenom("sum"); 
 
-``` 
+```
 
-
+---
  
 #### 4. Encoded Metric Aggregation 
  
@@ -91,7 +94,7 @@ new ElasticRatioAggregation() 
     } 
 }   
 
-```  
+```
   
 ```java
 new ElasticEncodedMetricAggregation() 
@@ -101,9 +104,9 @@ new ElasticEncodedMetricAggregation() 
         .bestValue("max") 
         .scale(0.01) 
         .includes(Arrays.asList(1L, 2L, 3L)); 
-``` 
+```
 
-
+---
 
 #### 5. Range Aggregation – Impact Profile  
 
@@ -133,9 +136,8 @@ new ElasticEncodedMetricAggregation() 
       ] 
     } 
   } 
-```   
-
-
+```
+---
 
 ####  6. Meta Aggregation 
  
@@ -160,15 +162,16 @@ new ElasticEncodedMetricAggregation() 
     } 
   } 
 } 
-``` 
+```
   
 ```java
 new ElasticMetaAggregation() 
       .name("INSTITUTION_FULL_NAME") 
     .field("organizations.institution_full_name") 
     .metrics("term"))); 
-``` 
+ ``` 
 
+---
 
 #### 7. Filters Aggregation 
  
@@ -197,8 +200,10 @@ new ElasticMetaAggregation() 
       } 
     } 
   } 
-```  
+```
  
+---
+
 #### 8. SearchEngine<?> engine = new HttpElasticSearchEngine(); 
  
  
@@ -210,9 +215,9 @@ new ElasticFiltersAggregation() 
         .filter("warnings", engine.termQuery().term("warning") 
                 .fields(SearchField.fields("message") )) 
         .aggregation( engine.distinctAggregation().field("message").name("count")) ); 
- ``` 
+```
 
-
+---
  
 #### 9. Custom** Filter Term Aggregation 
  
@@ -252,7 +257,7 @@ new ElasticFiltersAggregation() 
     ], 
     "exclude": [] 
   } 
-``` 
+ ``` 
  
   
 ```java
@@ -276,7 +281,7 @@ new ElasticFilterTermsAggregation() 
   } 
 }      
 
-``` 
+```
 
 ```java
 
@@ -285,7 +290,9 @@ new ElasticHIndexAggregation() 
         .name("H_INDEX") 
         .missing(2.2))); 
 
-``` 
+```
+
+---
 
 ####  11. H-index Aggregation 
  
@@ -297,7 +304,7 @@ new ElasticHIndexAggregation() 
   } 
 }      
  
-``` 
+```
 
   
 ```java
@@ -306,8 +313,8 @@ new ElasticHIndexAggregation() 
         .name("H_INDEX") 
         .missing(2.2))); 
 
-``` 
-   
+```
+---
  
 ####  12. Bucket Selector Aggregation   
   
@@ -324,20 +331,19 @@ new ElasticHIndexAggregation() 
     } 
   } 
 } 
-``` 
-
-     
+```
+  
 ```java 
 new ElasticBucketSelectorAggregation() 
  .name("bucketSelectorAgg_name") 
 .lang("painless") 
 .script("script") 
 .bucketsPath(Collections.singletonMap("bucket", "path")); 
-``` 
+```
+---
 
 #### 13. Filter Metric Aggregation – Author Position  
  
-  
 ```json
 "aggregations": { 
     "AUTHOR_POS": { 
@@ -370,9 +376,9 @@ new ElasticBucketSelectorAggregation() 
       } 
     } 
   } 
-``` 
+```
 
-
+---
  
 #### 14. Regular Aggregation Structure 
  
@@ -394,11 +400,11 @@ new ElasticBucketSelectorAggregation() 
       } 
     } 
   } 
- ``` 
+```
 
+---
 
-
- #### 15. Filter Term Aggregation – Entity filter    
+#### 15. Filter Term Aggregation – Entity filter    
  
   
 ```json
@@ -455,4 +461,4 @@ new ElasticBucketSelectorAggregation() 
   } 
 } 
  
-``` 
+```
