@@ -67,7 +67,7 @@ new ElasticQuartileAggregation() 
     "metrics_denom": "Sum" 
   } 
 } 
-``` 
+```
   
 ```java
 new ElasticRatioAggregation() 
@@ -169,7 +169,7 @@ new ElasticMetaAggregation() 
       .name("INSTITUTION_FULL_NAME") 
     .field("organizations.institution_full_name") 
     .metrics("term"))); 
- ``` 
+```
 
 ---
 
@@ -257,9 +257,8 @@ new ElasticFiltersAggregation() 
     ], 
     "exclude": [] 
   } 
- ``` 
+```
  
-  
 ```java
 new ElasticFilterTermsAggregation() 
       .name("filterAgg_name") 
