@@ -1,22 +1,24 @@
 
+## AI Evaluation Model for Evaluating the Quality of Academic Paper 
+
+
 
 To design a systematic approach, scoring model, and an LLM prompt for evaluating the quality of academic paper search results based on a user’s query (keywords, sentence, or Boolean logic), here’s a complete, modular setup:
 
 ⸻
 
 
-✅ 1. System Approach
+### ✅ 1. System Approach
 
-Goal: Evaluate how well retrieved academic papers match the user’s search intent and rank them by quality and relevance.
+**Goal**: Evaluate how well retrieved academic papers match the user’s search intent and rank them by quality and relevance.
 
-Input:
+**Input**:
 	•	User query (keywords, sentence, or Boolean logic)
 	•	Top N academic papers (title, abstract, metadata, possibly full text)
     
 
 
-
-System Architecture:
+**System Architecture**:
 
 ```plaintext
 +-------------------+           +--------------------------+           +---------------------+
@@ -38,18 +40,18 @@ System Architecture:
 
 ---
 
-✅ 2. Scoring Model
+### ✅ 2. Scoring Model
+
 
 Components (Scored 0–1 or 0–5, then weighted):
 
-
-
-
+```plaintext
 Total Score = Weighted sum of component scores (normalize to [0, 100])
+```
 
+---
 
-
-✅ 3. LLM Prompt (to Evaluate a Paper Given a Query)
+### ✅ 3. LLM Prompt (to Evaluate a Paper Given a Query)
 
 You can feed each paper (title, abstract, metadata) and ask the LLM to evaluate it like so:
 
@@ -92,8 +94,9 @@ Use this JSON format:
 }
 ```
 
+--- 
 
-✅ Example Output from LLM:
+### ✅ Example Output from LLM:
 
 ```json
 {
@@ -106,6 +109,7 @@ Use this JSON format:
   "final_score": 87
 }
 ```
+
 
 
 
