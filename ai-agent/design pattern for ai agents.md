@@ -144,3 +144,20 @@
   - May over-restrict creativity.
   - Requires ongoing tuning.
 - Example: Guardrails.ai, Llama Guard, NVIDIA NeMo Guardrails.
+
+
+---
+
+### Five Common AI Agent Design Patterns
+
+
+
+| Pattern              | Core Idea                                         | Strengths                                              | Weaknesses                                   | Latency / Cost         | Typical Use Cases                                      |
+|----------------------|---------------------------------------------------|--------------------------------------------------------|----------------------------------------------|------------------------|--------------------------------------------------------|
+| ReAct (Reason + Act) | Iteratively reason and call tools                 | Transparent reasoning, easy to debug, good for complex tasks | Long reasoning chains, requires loop management | Medium (multiple steps) | Complex QA, database queries, multi-step problem solving |
+| CodeAct              | Convert tasks into executable code and run        | High accuracy, reproducibility, leverages programming power | Needs controlled environment, risk of errors  | Medium-High (code execution) | Data analysis, automation, calculations, chart generation |
+| Agentic RAG          | Retrieval-Augmented Generation with strategy      | High factual accuracy, context-aware, updatable knowledge | More complex orchestration than classic RAG   | Medium                 | Enterprise QA, up-to-date document retrieval            |
+| Self-Reflection      | Model reviews and refines its own outputs         | Reduces hallucinations, improves reliability            | Extra computation, increases latency          | High (iterative steps) | Scientific, medical, legal content generation           |
+| Multi-Agent Planner  | Decompose and coordinate tasks among agents       | Scalable, supports complex/multi-domain tasks, parallelism | Complex architecture, higher cost/latency     | High (multi-agent)     | Large-scale research, cross-domain automation, workflows |
+
+
