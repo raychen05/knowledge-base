@@ -123,3 +123,92 @@ The future of prompt engineering lies not in tricks, but in designing reproducib
 
 👉 Do you want me to also create a visual cheat sheet / framework diagram for these 5 advanced techniques + outdated ones, so you can use it in presentations or team training?
 
+
+---
+
+## Prompt Engineering
+
+
+Someone turned prompt management into a true engineering system. Friends building AI applications — are you still managing prompts with documents? I just tried Volcano Engine’s new PromptPilot and it completely changed how I think about prompt tools.
+
+Before, tuning prompts meant “tweak and see” — you judged quality by feel. This system treats it as an engineering problem:
+
+- ✅ Task-driven construction — no more writing prompts by shot-in-the-dark.
+- ✅ Each version has its own evaluation set and automatic scoring.
+- ✅ Version-controlled and fully traceable — results are obvious at a glance.
+- ✅ Supports multi-turn dialogue optimization for complex scenarios.
+
+
+Best of all, it solves an industry pain: the stronger the model, the more demanding the prompt — yet management and iteration get harder
+
+PromptPilot = Prompt AutoML + GitOps, making AI applications sustainably optimizable.
+
+---
+
+### AI Product Interview-16: What are methods for tuning prompts?
+
+
+1️⃣ Content tuning: semantics & phrasing
+
+- Precisely define the role: Give the model a concrete identity to provide context and activate role-specific knowledge and language style.
+- Precisely define the task: Optimize the key instruction verbs and descriptions; pursue “mental imagery” — make abstractions concrete or try synonyms to describe the same action, compare outputs, and pick the best.
+- Use positive guidance: Tell the model what to do, not what not to do. Models can misunderstand negations.
+- Ensure logical completeness: Provide a complete, self-consistent logic chain and necessary background in the prompt. If required info is missing, the model may invent details to finish the task (hallucinate).
+- Distinguish guidance from hard rules: Prompts should guide/inspire, not impose inviolable constraints.
+- Optimize few-shot examples: Teach the model the task paradigm by providing examples.
+- Static few-shot: Put fixed examples directly in the prompt. Key: example quality and balance. For classification, either provide balanced examples for each class or provide none.
+- Dynamic few-shot: When candidate examples are numerous, combine with RAG. Dynamically retrieve the most similar examples to the user query and stitch them into the prompt.
+
+2️⃣ Structural tuning: instruction organization & layout
+
+- Use clear separators: separate instructions from content; separate knowledge modules; wrap user input with delimiters.
+- Bullet points & stepwise instructions: Break complex instructions into steps. Guide the model to think and act methodically.
+- Optimize instruction order: Models are sensitive to instruction order; different positions may carry different weights. Put the most important instructions at the front or back and see which works best.
+- Prefer a flat structure: Use a straightforward list of instructions and avoid deep nested logic. Flat structures align better with how large models process text sequentially.
+
+3️⃣ Strategic tuning: reasoning depth & stability
+
+- Chain-of-thought (CoT): Break complex reasoning into a series of simple, sequential intermediate steps. You can do this with examples embedded in the prompt or by directly instructing the model to “think step by step.” Force the model to “slow think,” showing its reasoning process rather than jumping to the answer — this improves accuracy.
+- CoT amplification: Use chain-of-thought prompts to generate multiple independent outputs for the same question (e.g., 3–5 runs). Because generation is stochastic, different reasoning paths may appear. Finally, vote among the outputs’ final answers and choose the majority result as the output.
+
+---
+
+### Prompting Guide | Four advanced techniques
+
+
+Having read OpenAI / Google / Anthropic prompting guidance, I’ve summarized some higher-level strategies to improve AI output quality.
+  
+
+1️⃣ Iterate constantly (ABI — Always Be Iterating)
+
+- Getting a perfect result first try is luck; continuous improvement is the norm. ABI says treat the first output as a draft and iteratively refine wording or constraints to raise quality.
+
+
+2️⃣ Task decomposition: multi-step workflows
+
+- For complex problems, asking for a finished result in one shot has a high failure rate. Break the work into consecutive subtasks and ask step-by-step to build the final result.
+- ▫️ Example: Writing a cover letter can be split into “generate an engaging opening,” “expand the body based on the opening,” and “finish with a strong closing.”
+
+
+3️⃣ Multi-variant expansion: request multiple versions
+
+- Avoid the limits of a single answer by asking the AI to generate multiple different versions (e.g., three). This gives more choices and can surface new ideas.
+- ▫️ Example: For Spotify A/B testing, given the copy “Music for every mood.” ask the AI to “generate three different ad copy variants.”
+
+
+4️⃣ Deep reasoning: prompt the AI to think
+
+- Besides asking for answers, prompt the AI to show its thinking to get deeper, more creative results.
+- ▫️ Chain of Thought: Ask the AI to explain step-by-step. This often yields more accurate answers.
+- ▫️ Tree of Thought: Ask the AI to explore multiple reasoning paths, evaluate them, and backtrack if an error is found. This explores a wider 
+solution space.
+- ▫️ Example: “Imagine three designers with different styles pitching solutions to me; have them take turns explaining their thought steps…”
+
+**Conclusion**:
+
+- Advanced prompting shifts from “one-shot asking” to “guided dialogue.” Through iteration, decomposition, and instructing deep thought, you can turn the model from a simple tool into a powerful collaborator.
+
+---
+
+
+
