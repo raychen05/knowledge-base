@@ -1,9 +1,11 @@
 
-### Best Approach to Automate Pipeline Trigger Based on Upstream S3 Data Arrival
+## Best Approach to Automate Pipeline Trigger Based on Upstream S3 Data Arrival
+
 
 Since the upstream data arrival time is uncertain, the best approach is to use event-driven triggers based on S3 file arrival. Here are the recommended approaches:
 
-🔹 1. Use AWS S3 Event Notifications + AWS Lambda to Trigger Databricks Job
+
+### 🔹 1. Use AWS S3 Event Notifications + AWS Lambda to Trigger Databricks Job
 
 - ✅ Best for near real-time triggering
 - ✅ Triggers Databricks workflow only when new data arrives
@@ -16,13 +18,14 @@ How It Works:
 
 Steps to Implement:
 
-🔹 Step 1: Configure S3 Event Notifications
+#### 🔹 Step 1: Configure S3 Event Notifications
 
 -	Go to S3 Console → Select your bucket → Properties → Event Notifications
 -	Configure event type: PUT (object created)
 -	Send the event to AWS Lambda
 
-🔹 Step 2: Create an AWS Lambda Function
+
+#### 🔹 Step 2: Create an AWS Lambda Function
 
 Python-based Lambda function to call Databricks API:
 ```python
@@ -48,14 +51,14 @@ def lambda_handler(event, context):
 -	Replace <DATABRICKS_INSTANCE> with your Databricks workspace URL.
 -	Set YOUR_JOB_ID to your Databricks job ID.
 
-🔹 Step 3: Deploy Lambda & Test
+#### 🔹 Step 3: Deploy Lambda & Test
 
 -	Deploy the Lambda function
 -	Upload a file to S3 → Lambda triggers → Databricks job starts 🚀
 
 ---
 
-🔹 2. Use Databricks Auto Loader with CloudFiles Trigger
+### 🔹 2. Use Databricks Auto Loader with CloudFiles Trigger
 
 - ✅ Best for handling streaming-like scenarios with minimal setup
 - ✅ Continuously monitors S3 for new files
@@ -88,7 +91,7 @@ df.writeStream \
 
 ---
 
-🔹 3. Use a Scheduled Job with S3 Existence Check
+### 🔹 3. Use a Scheduled Job with S3 Existence Check
 
 - ✅ Best when data arrival is somewhat predictable but not fixed
 - ✅ Simple implementation without S3 event triggers
@@ -121,7 +124,9 @@ else:
 -	Schedule this job to run every 30 minutes in Databricks.
 
 
-🔥 Best Approach Based on Use Case
+---
+
+### 🔥 Best Approach Based on Use Case
 
 | Approach               | Best For                              | Complexity | Latency          |
 |------------------------|---------------------------------------|------------|------------------|
@@ -136,7 +141,8 @@ else:
 
 ---
 
-Best Way to Check for New Data in S3 Without Starting a Cluster
+##  Best Way to Check for New Data in S3 Without Starting a Cluster
+
 
 If you want to check for new data in an automated Databricks pipeline job without unnecessarily starting a cluster, you should use Databricks Jobs with a lightweight method, such as:
 
@@ -145,7 +151,7 @@ If you want to check for new data in an automated Databricks pipeline job withou
 Instead of starting a heavy Spark cluster, you can use a Databricks Job with a Python task that runs in a lightweight Single Node Cluster (or even use a Databricks SQL warehouse if your data is in Unity Catalog).
 
 
-🚀 Implementation Steps:
+### 🚀 Implementation Steps:
 
 1.	Create a Databricks Job
 -	Define a Python Task that checks S3 for new data.
@@ -156,7 +162,7 @@ Instead of starting a heavy Spark cluster, you can use a Databricks Job with a P
 
 ---
 
-📌 Python Script to Check S3 for New Data
+### 📌 Python Script to Check S3 for New Data
 
 Save this as check_s3.py and use it in a Databricks Job.
 
@@ -197,7 +203,7 @@ if __name__ == "__main__":
 
 ---
 
-📌 Databricks Job Configuration (YAML)
+### 📌 Databricks Job Configuration (YAML)
 
 Use the following Databricks Job YAML to schedule the check:
 
@@ -222,14 +228,14 @@ job_clusters:
 
 ```
 
-🔥 Key Benefits of This Approach
+### 🔥 Key Benefits of This Approach
 
 - ✅ Does NOT require a heavy Spark cluster – Uses a lightweight Python script.
 - ✅ Only triggers the processing job when data arrives – No unnecessary runs.
 - ✅ Uses Databricks API to trigger the main pipeline dynamically.
 - ✅ Can be scheduled to run every X minutes or hours.
 
-Alternative Approaches
+### Alternative Approaches
 
 -	AWS Lambda + S3 Events (If you prefer an AWS-native trigger)
 -	Databricks Auto Loader (If continuous file ingestion is needed)

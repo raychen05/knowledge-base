@@ -1,160 +1,12 @@
 
-###  Job Worflow Control in Databricks
 
-To trigger multiple jobs in sequence or parallel and recover from failure in a data pipeline workflow, we need to consider several aspects:
-
-
-#### Methodology & Approach:
-
-1.	Job Execution: Trigger jobs in sequence or parallel based on dependencies and required concurrency.
--	Sequential execution: Trigger each job one after the other, waiting for the previous one to finish.
--	Parallel execution: Trigger jobs simultaneously, independent of each other.
-
-2.	Error Handling and Recovery:
--	Retry Mechanism: On job failure, we should implement automatic retries for a certain number of attempts before marking it as a failure.
--	Failure Recovery: On failure, trigger alert notifications (e.g., via email or dashboards) and log failure details. Optionally, rollback to the last known good state of the job.
--	Job Rollback: When a job fails, rollback to a previously known successful state (using Delta Lake or equivalent).
-
-3.	Alerting: Set up notifications using email, Slack, or custom monitoring systems to inform stakeholders when a failure occurs.
-
-4.	Workflow Configuration: Use tools like Databricks Jobs, Airflow, or custom scripts to automate the workflow.
-
----
-
-
-#### Steps to Configure Workflow:
-
-1.	Define Jobs: Each job in the pipeline should be defined as a separate unit of work, with dependencies set for sequential or parallel execution.
-2.	Retry Mechanism: Set a retry limit for each job.
-3.	Error Handling: Catch exceptions and handle failures with appropriate logging, alerts, and rollback steps.
-4.	Rollback: Use Delta Lake or equivalent to ensure that changes can be reverted to a previous state in case of failure.
-5.	Alerting: Use email or another system to notify stakeholders in case of failure.
-
----
-
-#### Scala Example: Automatic Pipeline Workflow with Retry, Failure Recovery, Alerting, and Rollback
-
-```scala
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions._
-import io.delta.tables._
-import scala.util.control.Breaks._
-import scala.concurrent.duration._
-
-val spark = SparkSession.builder().appName("DataPipelineWorkflow").getOrCreate()
-
-// Task names
-val taskNames = Seq("task1", "task2", "task3")
-
-// Retry settings
-val maxRetries = 3
-val retryDelay = 5.seconds
-
-// Simulating a function that runs the task and handles retries
-def runJobWithRetry(taskName: String, jobFunc: () => Unit): Unit = {
-  var attempt = 0
-  var success = false
-  breakable {
-    while (attempt < maxRetries) {
-      try {
-        println(s"Running task: $taskName (Attempt ${attempt + 1})")
-        jobFunc()  // Run the actual job function
-        success = true
-        println(s"Task $taskName completed successfully.")
-        break
-      } catch {
-        case e: Exception =>
-          attempt += 1
-          println(s"Task $taskName failed (Attempt ${attempt}) due to: ${e.getMessage}")
-          if (attempt >= maxRetries) {
-            // Log failure and alert
-            sendAlert(s"Task $taskName failed after $maxRetries attempts.")
-            handleFailure(taskName, e)
-            throw e  // Rethrow to stop the pipeline
-          }
-          println(s"Retrying task $taskName in ${retryDelay.toSeconds} seconds...")
-          Thread.sleep(retryDelay.toMillis)  // Delay before retry
-      }
-    }
-  }
-}
-
-// Define a sample job function (this would be your actual task logic)
-def sampleJob(taskName: String): Unit = {
-  if (taskName == "task2") throw new RuntimeException("Simulated task failure")
-  // Actual job logic (e.g., reading data, processing, etc.)
-  println(s"Processing data for task: $taskName")
-}
-
-// Function to send alerts (can be via email, Slack, etc.)
-def sendAlert(message: String): Unit = {
-  println(s"ALERT: $message")
-  // Implement email or Slack alerting here
-}
-
-// Function to handle failure, including logging and rollback
-def handleFailure(taskName: String, e: Exception): Unit = {
-  // Log the error in Delta Table or other systems
-  println(s"Logging failure for $taskName: ${e.getMessage}")
-  
-  // Rollback to the previous successful state if using Delta Lake
-  val deltaTable = DeltaTable.forPath(spark, "dbfs:/mnt/delta/staging_table")
-  deltaTable.restoreToVersion(1)  // Assuming version 1 is the last successful state
-  
-  // Send failure alerts
-  sendAlert(s"Task $taskName failed: ${e.getMessage}")
-}
-
-try {
-  // Sequential Execution (Can also use parallel execution with Future or other concurrency mechanisms)
-  taskNames.foreach { taskName =>
-    runJobWithRetry(taskName, () => sampleJob(taskName))
-  }
-
-} catch {
-  case e: Exception =>
-    println(s"Pipeline execution failed due to: ${e.getMessage}")
-    // Handle overall failure of the pipeline
-    sendAlert(s"Pipeline execution failed: ${e.getMessage}")
-    // Optionally, rollback entire pipeline state here if needed
-}
-```
-
----
-
-#### Key Components:
-
-1.	Job Retry Mechanism: The runJobWithRetry function retries the job up to maxRetries times before failing.
-2.	Error Handling: If a job fails, an alert is sent, the error is logged, and a rollback operation is triggered using Delta Lake.
-3.	Rollback: If a job fails, the previous successful version of the Delta table is restored.
-4.	Alerting: Alerts are sent using the sendAlert function (could be expanded to send emails, messages to Slack, etc.).
-5.	Sequential Execution: Jobs are executed one after another in the taskNames.foreach loop. For parallel execution, you could use concurrency features such as Scala Futures.
-6.	Logging Failure: When a job fails, the error is logged and a failure message is sent.
-
-
-#### Configuring the Workflow:
-
--	Job Dependencies: In Databricks, you can configure job dependencies in the Job UI, where jobs can be set to run sequentially or in parallel.
--	Retries and Recovery: Databricks jobs offer built-in retry mechanisms that you can configure. For more fine-grained control, you can implement your own retry logic as shown above.
-
-#### 
-
-Next Steps:
-
--	Alerting: You can configure email notifications or use Databricks’ built-in alerting system for better observability.
--	Logging: Store error logs and job statuses in a centralized location (e.g., Delta table, log aggregation tools).
--	Data Quality Checks: Add checks for data quality before moving to the next job (e.g., schema validation, row count validation).
-
-
----
-
-### Architecture Overview & Configuration
+## Architecture Overview & Configuration
 
 To implement an automated, fault-tolerant data pipeline with multiple jobs that can run sequentially or in parallel, where a job’s input depends on the output of other jobs, and failure recovery is applied only to the failed job without restarting from the beginning, you can leverage Databricks Jobs and a Metadata Log Table to track the job statuses.
 
 ---
 
-#### Architecture Overview
+### 1. Architecture Overview
 
 1.	Databricks Jobs: Define individual jobs in Databricks. Each job can run in parallel or sequentially depending on the dependencies you configure.
 2.	Metadata Log Table: A table to track the job statuses (pending, in-progress, success, failed). This log will help in identifying which job failed, and it allows you to resume from the failed job instead of re-running the entire pipeline.
@@ -164,12 +16,12 @@ To implement an automated, fault-tolerant data pipeline with multiple jobs that 
 
 ---
 
-#### Step-by-Step Workflow Configuration in Databricks (No Programming Required)
+### 2. Step-by-Step Workflow Configuration in Databricks (No Programming Required)
 
 
 ---
 
-#### 1. Create a Metadata Log Table
+#### step-1. Create a Metadata Log Table
 
 This table will track the execution status of each job in the pipeline. You can create this table using a Databricks notebook or manually, depending on your environment.
 
@@ -197,11 +49,11 @@ You can use this table to log the status of each job during its execution.
 
 ---
 
-#### 2. Configure Databricks Jobs
+#### step-2. Configure Databricks Jobs
 
 You can configure multiple jobs within the Databricks UI. Here’s how you can configure a simple pipeline with sequential or parallel jobs and a dependency on another job’s output.
 
-Step 2.1: Define Jobs
+*Step 2.1: Define Jobs*
 
 -	Job 1: Task A
 -	Job 2: Task B (depends on Task A)
@@ -209,7 +61,8 @@ Step 2.1: Define Jobs
 -	Job 4: Task D (depends on Task B)
 
 ---
-Step 2.2: Configure Sequential Jobs
+
+**Step 2.2: Configure Sequential Jobs**
 
 In Databricks, you can set up dependencies for jobs. If Job B depends on Job A, follow these steps:
 
@@ -222,7 +75,8 @@ Example: Job 2 (Task B) depends on the output of Job 1 (Task A).
 -	Under Job Cluster, set the Dependency to Job 1. This ensures that Job 2 only runs after Job 1 finishes successfully.
 
 ---
-Step 2.3: Configure Parallel Jobs
+
+**Step 2.3: Configure Parallel Jobs**
 
 In Databricks, jobs that are independent can run in parallel. For example, if Job 3 doesn’t depend on Job 2, you can configure them to run in parallel:
 
@@ -230,7 +84,8 @@ In Databricks, jobs that are independent can run in parallel. For example, if Jo
 2.	Jobs 3 and 2 will run concurrently.
 
 ---
-Step 2.4: Failure Handling and Retry
+
+**Step 2.4: Failure Handling and Retry**
 
 1.	Configure Retry Logic: In the Databricks UI, under each job’s settings, you can set the number of retries in case of a job failure.
 2.	Failure Recovery: In case a job fails, you can configure the job to retry automatically up to a set number of times. After the retries are exhausted, the job should mark as failed in the metadata table.
@@ -238,7 +93,7 @@ Step 2.4: Failure Handling and Retry
 
 ---
 
-#### 3. Update the Metadata Log Table
+### 3. Update the Metadata Log Table
 
 Each job will log its status in the metadata log table during execution. After each job run, update the status (in-progress, success, or failed) in the metadata table.
 
@@ -249,7 +104,8 @@ Each job will log its status in the metadata log table during execution. After e
 
 
 ---
-#### 4. Recovery from Failure
+
+### 4. Recovery from Failure
 
 If a job fails:
 
@@ -259,7 +115,7 @@ If a job fails:
 
 ---
 
-#### 5. Monitor and Alerting
+### 5. Monitor and Alerting
 
 -	You can configure Databricks to send email notifications on job failures and retries.
 -	Use Databricks Job Notifications to alert stakeholders via email or webhook when jobs fail or succeed.
@@ -267,7 +123,8 @@ If a job fails:
 
 
 ---
-#### 6. Example of Job Configuration in Databricks UI
+
+### 6. Example of Job Configuration in Databricks UI
 
 1.	Job 1 (Task A):
 -	Type: Notebook/Run command
@@ -291,7 +148,7 @@ If a job fails:
 
 ---
 
-#### Summary:
+### Summary:
 
 -	Job Dependencies: Set jobs to run sequentially or in parallel by defining dependencies in Databricks Jobs UI.
 -	Retry Logic: Configure automatic retries for job failures.
@@ -302,19 +159,22 @@ If a job fails:
 This approach allows you to manage and automate complex workflows in Databricks without programming, and ensures that jobs only retry in case of failure, using the metadata table to track progress and prevent unnecessary reruns.
 
 
+
 ---
 
-###  Configuration Example of Multiple Jobs
+
+##  Configuration Example of Multiple Jobs
 
 Here are individual job.yml configuration files for each Databricks Workflow Job in the pipeline. These jobs are separate individual jobs, not tasks within a single job.
 
-📌 Overview of the Workflow:
+
+### 📌 Overview of the Workflow:
 
 1.	data_extract_job.yml → Extracts data from the source.
 2.	data_load_job.yml → Loads extracted data into a Delta table.
 3.	es_load_job.yml → Indexes loaded data into Elasticsearch.
 
-Dependencies:
+**Dependencies**:
 
 -	data_extract_job runs first.
 -	data_load_job runs after data_extract_job completes.
@@ -323,7 +183,7 @@ Dependencies:
 
 ---
 
-1️⃣ Data Extract Job (data_extract_job.yml)
+### 1️⃣ Data Extract Job (data_extract_job.yml)
 
 ```yaml
 jobs:
@@ -350,8 +210,9 @@ jobs:
         job_name: Data_Load_Job
 ```
 
+---
 
-2️⃣ Data Load Job (data_load_job.yml)
+### 2️⃣ Data Load Job (data_load_job.yml)
 
 ```yaml
 jobs:
@@ -378,8 +239,9 @@ jobs:
         job_name: ES_Load_Job
 ```
 
+---
 
-3️⃣ Elasticsearch Load Job (es_load_job.yml)
+### 3️⃣ Elasticsearch Load Job (es_load_job.yml)
 
 ```yaml
 jobs:
@@ -404,7 +266,7 @@ jobs:
 
 ---
 
-📌 How It Works
+### 📌 How It Works
 
 1.	Data_Extract_Job runs first.
 2.	When Data_Extract_Job completes successfully, it automatically triggers Data_Load_Job.
@@ -413,7 +275,7 @@ jobs:
 5.	Email alerts are sent on failures.
 
 
-🌟 Why This Approach?
+### 🌟 Why This Approach?
 
 - ✅ Jobs are independent but still linked using triggers.
 - ✅ Failure Recovery → Failed jobs retry without restarting the whole pipeline.

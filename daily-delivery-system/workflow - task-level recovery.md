@@ -1,11 +1,12 @@
 
-### Methodology & Approach for Task-Level Recovery in a Data Pipeline Job
+## Methodology & Approach for Task-Level Recovery in a Data Pipeline Job
+
 
 When running multiple data processing tasks sequentially within a single job, where each task’s output serves as input for the next task, it’s essential to implement a robust checkpointing and recovery mechanism. This ensures that when a task fails, it can resume from the last successful task instead of re-executing the entire pipeline.
 
 ---
 
-#### Architecture & Workflow Approach
+### 1. Architecture & Workflow Approach
 
 The architecture should include:
 
@@ -23,7 +24,7 @@ The architecture should include:
 
 ---
 
-#### Databricks Workflow Implementation
+### 2.  Databricks Workflow Implementation
 
 Using Databricks Workflows (Task-Oriented Execution)
 
@@ -35,13 +36,15 @@ Databricks supports task dependencies, allowing you to restart from failed tasks
 
 Example Databricks Job Task Graph:
 
+```text
 Task 1 → Task 2 → Task 3 → Task 4
 
 If Task 3 fails, you can restart Task 3 and Task 4 without rerunning Task 1 & Task 2.
+```
 
 ---
 
-#### Scala Spark Implementation Using Checkpoints & Metadata Log
+### 3. Scala Spark Implementation Using Checkpoints & Metadata Log
 
 The following example demonstrates:
 
@@ -49,7 +52,7 @@ The following example demonstrates:
 -	Automatic resumption from the last successful task.
 
 
-1️⃣ Define a Metadata Log Table
+#### 1️⃣ Define a Metadata Log Table
 
 Each task writes a checkpoint entry in a tracking table.
 
@@ -71,8 +74,9 @@ spark.sql(s"""
   ) USING DELTA
 """)
 ```
+---
 
-2️⃣ Function to Check Task Completion
+#### 2️⃣ Function to Check Task Completion
 
 Before running a task, check if it has already been completed.
 
@@ -82,8 +86,9 @@ def isTaskCompleted(taskName: String): Boolean = {
   df.count() > 0
 }
 ```
+---
 
-3️⃣ Process Tasks with Recovery Mechanism
+#### 3️⃣ Process Tasks with Recovery Mechanism
 
 Each task logs its execution status before starting and updates it after success.
 
@@ -112,7 +117,9 @@ def executeTask(taskName: String, taskLogic: () => Unit): Unit = {
 }
 ```
 
-4️⃣ Define Your Tasks
+---
+
+#### 4️⃣ Define Your Tasks
 
 Each task runs only if it hasn’t already been successfully executed.
 
@@ -137,9 +144,10 @@ executeTask("Task4", () => {
   println("Executing Task 4")
 })
 ```
+
 ---
 
-#### Summary
+### Summary
 
 Task-Level Recovery in Databricks Workflow
 
@@ -155,23 +163,24 @@ Task-Level Recovery in Databricks Workflow
 
 ---
 
-#### Final Recommendation
+### Final Recommendation
 
 -	Use Databricks Workflows for a managed approach with task dependencies.
 -	Use Scala Spark Checkpointing for finer control over failures and retries.
 -	Store metadata logs to track completed and failed tasks, ensuring efficient recovery without redundant processing.
 
 
-
 ---
 
-### Workflow for Task-Level Recovery in a Data Pipeline Job - No programming
+
+
+## Workflow for Task-Level Recovery in a Data Pipeline Job - No programming
 
 
 Yes, it’s possible to implement a workflow with failure point recovery in Databricks using only Delta Lake, Databricks Workflows, and Task Configuration—without additional programming. Here’s how:
 
 
-#### 1. Use Databricks Workflows for Task Orchestration
+### 1. Use Databricks Workflows for Task Orchestration
 
 -	Define multiple tasks in a Databricks Workflow Job.
 -	Set dependencies between tasks (output of one task as input for another).
@@ -179,7 +188,7 @@ Yes, it’s possible to implement a workflow with failure point recovery in Data
 
 ---
 
-#### 2. Store Task Execution Status in Delta Lake
+### 2. Store Task Execution Status in Delta Lake
 
 -	Each task updates a metadata table (stored in Delta Lake) that tracks:
     -	Task Name
@@ -190,7 +199,7 @@ Yes, it’s possible to implement a workflow with failure point recovery in Data
 
 ---
 
-#### 3. Configure Failure Recovery in Databricks Workflow
+### 3. Configure Failure Recovery in Databricks Workflow
 
 -	Enable “Run on Failure” Options:
     -	Retry Failed Tasks Automatically (Set Max Retries in Task Settings).
@@ -201,14 +210,14 @@ Yes, it’s possible to implement a workflow with failure point recovery in Data
 
 ---
 
-#### 4. Use Delta Tables for Intermediate Data Storage
+### 4. Use Delta Tables for Intermediate Data Storage
 
 -	Save task outputs to Delta Lake (e.g., bronze, silver, gold layers).
 -	Tasks read only required partitions, reducing redundant processing.
 
 ---
 
-5. No Programming Required – Configuration Only
+### 5. No Programming Required – Configuration Only
    
 -	Workflow Job: Configured in UI with task dependencies.
 -	Failure Handling: Set retry policies.
@@ -218,7 +227,7 @@ Yes, it’s possible to implement a workflow with failure point recovery in Data
 
 ---
 
-#### Example Workflow Execution Flow
+### Example Workflow Execution Flow
 
 |Task	|Status Check|	Action|
 |-------------------------|----------|----------|
@@ -226,20 +235,23 @@ Yes, it’s possible to implement a workflow with failure point recovery in Data
 |Task 2: Transform Data	|Check status in Delta Table|	Skip or rerun only if failed|
 |Task 3: Load Data to Target|	Read processed data from Delta	|Resume from failure if needed|
 
+---
 
-#### Conclusion
+### Conclusion
 
 ✅ Yes, it’s possible to build a fully recoverable pipeline using Databricks Workflows & Delta Lake—without programming.
 🚀 Best for ETL pipelines, batch processing, and fault-tolerant workflows.
 
 
----
-
-### Example: Workflow for Task-Level Recovery in a Data Pipeline Job - No programming
 
 ---
 
-#### Step-by-Step Guide: Configuring Databricks Workflow for Failure Recovery (No Programming Required)
+
+
+## Example: Workflow for Task-Level Recovery in a Data Pipeline Job
+
+
+### Step-by-Step Guide: Configuring Databricks Workflow for Failure Recovery
 
 This guide shows how to configure a Databricks Workflow Job using Delta Lake for failure recovery in job.yml. The setup ensures that:
 
@@ -250,7 +262,7 @@ This guide shows how to configure a Databricks Workflow Job using Delta Lake for
 
 ---
 
-1️⃣ Configure Delta Table for Tracking Task Status
+#### 1️⃣ Configure Delta Table for Tracking Task Status
 
 Before setting up the workflow, create a Delta Table (pipeline_task_status) to track task execution.
 
@@ -268,7 +280,7 @@ CREATE TABLE IF NOT EXISTS pipeline_task_status (
 
 --- 
 
-2️⃣ Define Workflow in job.yml
+##### ️⃣ Define Workflow in job.yml
 
 Below is an example job.yml file that defines a multi-step workflow with failure recovery:
 
@@ -312,7 +324,7 @@ job:
 
 ---
 
-3️⃣ Task Execution Logic
+#### 3️⃣ Task Execution Logic
 
 Each task notebook should:
 
@@ -430,7 +442,7 @@ try {
 
 ---
 
-4️⃣ How This Ensures Failure Recovery
+#### 4️⃣ How This Ensures Failure Recovery
 
 -	Each task first checks its status in pipeline_task_status.
 -	If successful, it skips execution to save compute time.
@@ -441,7 +453,7 @@ try {
 
 ---
 
-✅ Benefits of This Approach
+### ✅ Benefits of This Approach
 
 -	No manual intervention required for retries.
 -	Efficient failure recovery – no need to start from scratch.
@@ -451,7 +463,7 @@ try {
 
 ---
 
-🔔 Failure Alerting
+### 🔔 Failure Alerting
 
 1.	Email Notifications: Configure job failure alerts to notify team members.
 2.	Webhook Integration: Send failure alerts to Slack, Teams, or monitoring systems.
@@ -459,7 +471,7 @@ try {
 
 ---
 
-🔄 Automated Rollback on Failure
+### 🔄 Automated Rollback on Failure
 
 1.	Delta Lake Time Travel: If a processing step fails, revert to the last checkpoint using RESTORE.
 2.	Job Restart with Checkpoints: Restart from the last successful step instead of reprocessing everything.
@@ -504,7 +516,7 @@ try {
 
 ---
 
-🔥 Recommended Approach
+### 🔥 Recommended Approach
 
 -	Use Databricks Workflow Task Dependencies for automatic retries & failure recovery.
 -	Store intermediate data in Delta Lake and use versioning for rollback.
@@ -513,11 +525,11 @@ try {
 
 ---
 
-#### A complete YAML example for configuring failure recovery in Databricks Workflows
+### A complete YAML example for configuring failure recovery in Databricks Workflows
 
 Here’s a complete Databricks Workflow YAML configuration for failure recovery, automated rollback, and alerting  in Databricks Workflows.:
 
-📌 Key Features in This job.yml
+#### 📌 Key Features in This job.yml
 
 1.	Failure Recovery with Retry:
 -	If a task fails, it retries 3 times with exponential backoff.
@@ -532,7 +544,7 @@ Here’s a complete Databricks Workflow YAML configuration for failure recovery,
 
 ---
 
-📌 Databricks Job Configuration (job.yml)
+#### 📌 Databricks Job Configuration (job.yml)
 
 ```yaml
 name: "Data Pipeline Workflow with Failure Recovery"
@@ -597,7 +609,7 @@ tasks:
 
 ---
 
-📌 Supporting Notebooks
+#### 📌 Supporting Notebooks
 
 1️⃣ Rollback Notebook (rollback_data)
 
@@ -628,9 +640,8 @@ spark.sql(f"RESTORE TABLE staging_table TO VERSION AS OF (SELECT MAX(version) FR
 
 ---
 
-🔥 Summary
+### 🔥 Summary
 
-## Summary
 
 | Feature                 | Description |
 |-------------------------|-------------|

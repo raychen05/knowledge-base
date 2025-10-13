@@ -5,6 +5,7 @@
 
 Here’s a production-ready blueprint for a reliable, robust pipeline that processes/joins data, computes metrics, and loads directly to Elasticsearch (ES) with fault-tolerance, auto-retry, real-time notifications, auto-recovery, and monitoring. I’m also adding the key missing features teams rely on for true NRT/real-time, automated workflows in prod.
 
+--- 
 
 #### 1. High-level architecture (NRT + Daily)
 
@@ -122,6 +123,7 @@ Governance: Schema Registry + Contracts + Versioning + Audit & lineage
   - Validate (counts, sample hashes, GE tests)
   - aliases: { myindex: { is_write_index: false }, myindex_new: { ... } } → swap atomically to myindex.
 
+---
 
 #### 6. Resilient ES bulk loader (Python)
 
@@ -214,7 +216,7 @@ def foreach_batch(writer_df, batch_id):
  ’ll go deeper into each of the “missing but essential” features for real-time, production-grade pipelines so you have a proper reference.
 I’ll expand on why they matter, what can go wrong without them, and how to implement them.
 
-
+--- 
 
 #### 1. Idempotent Design
 
@@ -229,6 +231,8 @@ How:
 - Store event sequence numbers and drop stale ones.
 - For updates, use ES upsert with doc_as_upsert.
 - Avoid random UUIDs for indexing unless truly needed.
+
+---
 
 #### 2. Backfill & Replay Tooling
 
@@ -247,6 +251,7 @@ How:
   - Validate before merging to main alias.
 - Ensure replays respect idempotent logic.
 
+---
 
 #### 3. Canary & Shadow Indexing
 
@@ -265,6 +270,7 @@ How:
   - Random document diffs.
 - Once passed, atomically swap ES alias to the shadow index.
 
+---
 
 #### 4. Circuit Breaker & Rate Limiting
 
@@ -284,6 +290,7 @@ How:
   - Reduce bulk size / concurrency temporarily.
 - Resume when healthy.
 
+---
 
 #### 5. Schema Evolution Policy & Contract Tests
 
@@ -300,6 +307,8 @@ How:
   - Adding new optional fields = OK.
   - Changing string → long = BLOCK.
 - Auto-generate mapping templates from schema registry.
+
+---
 
 #### 6. Cost & Capacity Controls
 
@@ -318,6 +327,7 @@ How:
 - Tiered storage via ILM (hot → warm → cold).
 - Backpressure in the ingestion layer.
 
+---
 
 #### 7. Access Control & PII Handling
 
@@ -333,6 +343,7 @@ How:
 - Strip PII at the ETL stage before ES load.
 - Apply role-based access control (RBAC) for ES API keys.
 
+---
 
 #### 8. Runbooks & Auto-Remediation Jobs
 
@@ -349,7 +360,7 @@ How:
   - Auto-rollover if shard size > threshold.
   - Restart jobs if heartbeat missing.
 
-
+---
 
 #### 9. Disaster Recovery & Cross-Cluster Replication (CCR)
 
@@ -365,6 +376,7 @@ How:
 - Cross-cluster replication to a standby cluster in another region.
 - Tested restore drills.
 
+---
 
 #### 10. Observability
 
