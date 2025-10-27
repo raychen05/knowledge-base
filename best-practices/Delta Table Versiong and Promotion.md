@@ -379,7 +379,7 @@ ASCII (quick pasteable)
 
 **Mermaid** (for markdown renderers that support it)
 
-```mermaid
+```text
 flowchart LR
   A[Raw Feeds] --> B[dap_bronze.raw_*]
   B --> C[dap_silver_pp (Pre-Prod)]
