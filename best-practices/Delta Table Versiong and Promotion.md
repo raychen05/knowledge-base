@@ -816,23 +816,25 @@ Raw → Bronze (Shared & Immutable)
 
 ### 📂 Catalog & Naming Conventions
 
-Layer	Catalog Example	Description
-Raw/Bronze	dap_bronze	Landing zone / append-only sync from sources
-Silver (Pre-Prod)	dap_silver_pp	Iteration + schema evolution + UAT validation
-Silver (Prod)	dap_silver_pr	Only via promotion pipeline
-Metadata/Audit	dap_meta	Promotion registry, QC results, lineage notes
-Gold	dap_gold	Business curated, optimized models
+| Layer             | Catalog Example | Description                                      |
+|-------------------|-----------------|--------------------------------------------------|
+| Raw/Bronze        | dap_bronze      | Landing zone / append-only sync from sources     |
+| Silver (Pre-Prod) | dap_silver_pp   | Iteration + schema evolution + UAT validation    |
+| Silver (Prod)     | dap_silver_pr   | Only via promotion pipeline                      |
+| Metadata/Audit    | dap_meta        | Promotion registry, QC results, lineage notes    |
+| Gold              | dap_gold        | Business curated, optimized models               |
+
 
 ---
 
 
 ### 🔐 Security — Clear Separation
 
-
-Action	Pre-Prod	Prod
-Read	✅	✅
-Write/Modify	✅	❌ via users <br/> ✅ via CI promotion job
-Drop	✅	❌ (manual approval only)
+| Action        | Pre-Prod | Prod                                        |
+|----------------|-----------|--------------------------------------------|
+| Read          | ✅        | ✅                                          |
+| Write/Modify  | ✅        | ❌ via users <br/> ✅ via CI promotion job  |
+| Drop          | ✅        | ❌ (manual approval only)                   |
 
 
 ---
@@ -859,10 +861,12 @@ VERSION AS OF {SOURCE_VERSION};
 
 ### 🏷️ Tagging Strategy
 
-Tag Example	Meaning
-2025Q4_R1	Release 1 of 2025 Q4
-2025Q4_UAT_Pass	Frozen for release; candidate version
-rollback_2025Q4_R1	Emergency rollback
+| Tag Example         | Meaning                                 |
+|----------------------|------------------------------------------|
+| 2025Q4_R1           | Release 1 of 2025 Q4                    |
+| 2025Q4_UAT_Pass     | Frozen for release; candidate version    |
+| rollback_2025Q4_R1  | Emergency rollback                       |
+
 
 **Only tagged versions** are eligible for promotion.
 
@@ -876,12 +880,14 @@ SET TBLPROPERTIES ('release_tag' = '2025Q4_R1', 'source_version' = '189');
 
 ### ✅ Quality Gates (Mandatory before Promotion)
 
-Category	Check Examples
-Schema Consistency	No breaking changes vs last promoted
-PK Health	Nulls/duplicates > threshold?
-Row Count	Sudden shrink/growth > 10%?
-Data Validity	Critical business logic validation
-Operational	Job runs clean / no warnings
+| Category            | Check Examples                          |
+|----------------------|------------------------------------------|
+| Schema Consistency  | No breaking changes vs last promoted     |
+| PK Health           | Nulls/duplicates > threshold?            |
+| Row Count           | Sudden shrink/growth > 10%?              |
+| Data Validity       | Critical business logic validation       |
+| Operational         | Job runs clean / no warnings             |
+
 
 Fail any gate → **block promotion**. Results written to dap_meta.quality_reports.
 
@@ -891,11 +897,13 @@ Fail any gate → **block promotion**. Results written to dap_meta.quality_repor
 ### ♻️ Data Retention & Version Cleanup
 
 
-Layer	Strategy
-Bronze	Store indefinitely (regulatory retention)
-Silver Pre-Prod	Keep last N=3 tagged versions per table
-Silver Prod	Keep last N=6 promoted versions
-Auto VACUUM	Enabled after retention checkpoint
+| Layer           | Strategy                                      |
+|-----------------|------------------------------------------------|
+| Bronze          | Store indefinitely (regulatory retention)      |
+| Silver Pre-Prod | Keep last N=3 tagged versions per table        |
+| Silver Prod     | Keep last N=6 promoted versions                |
+| Auto VACUUM     | Enabled after retention checkpoint             |
+
 
 ⚠️ When deep clone is required:
 - If Prod must survive Bronze cleanup
@@ -920,11 +928,13 @@ quality_status=ROLLBACK + metadata.
 
 ### ✅ What This Delivers
 
-Benefit	Description
-No duplication of Bronze	Pre-Prod + Prod share raw data
-Minimal storage for Silver Prod	Only Delta metadata differs
-Traceable & recoverable	Every Prod table has lineage + version pin
-CI/CD compliance	Only automation writes to Prod
+| Benefit                     | Description                              |
+|------------------------------|------------------------------------------|
+| No duplication of Bronze     | Pre-Prod + Prod share raw data           |
+| Minimal storage for Silver Prod | Only Delta metadata differs           |
+| Traceable & recoverable      | Every Prod table has lineage + version pin |
+| CI/CD compliance             | Only automation writes to Prod           |
+
 
 
 ---
@@ -970,11 +980,12 @@ Table-level = flexible, safe, least blast radius, ideal for 100+ tables evolving
 
 ### ✅ How to Promote by Table Category
 
-Table Type	Promotion Strategy	Example Action
-✅ Schema unchanged	Promote only if data changed or business wants new version	Shallow clone from version X
-✅ Schema changed	Requires validation + metadata checks	Shallow clone pinned version + metadata sync
-✅ Net new table	Promote only if needed in Prod	CREATE … SHALLOW CLONE
-⛔ Breaking schema change	Version bump + backward compatibility plan	Block promotion until consumers ready
+| Table Type               | Promotion Strategy                                      | Example Action                               |
+|---------------------------|----------------------------------------------------------|-----------------------------------------------|
+| ✅ Schema unchanged       | Promote only if data changed or business wants new version | Shallow clone from version X                 |
+| ✅ Schema changed         | Requires validation + metadata checks                   | Shallow clone pinned version + metadata sync  |
+| ✅ Net new table          | Promote only if needed in Prod                          | CREATE … SHALLOW CLONE                        |
+| ⛔ Breaking schema change | Version bump + backward compatibility plan              | Block promotion until consumers ready         |
 
 
 ---
