@@ -697,14 +697,33 @@ This plan assumes you have: Elasticsearch (ES) cluster, Postgres for canonical m
 
 I generated simple mockups for three screens and saved them to /mnt/data. Download them:
 
-- Team Overview — KPI bar chart: Download overview_kpis.png
-- Team Overview — Top papers: Download overview_top_papers.png
-- Author Explorer — Publications over time: Download author_pubs_time.png
-- Author Explorer — Citation distribution: Download author_citation_box.png
-- Author Explorer — Ego network: Download author_ego_network.png
-- Topics & Clusters — Embedding scatter: Download topics_embedding_scatter.png
-- Topics & Clusters — Topic heatmap: Download topics_heatmap.png
+- Team Overview — KPI bar chart:
+  ![alt text](png/overview_kpis.png)
+
+- Team Overview — Top papers:
+    ![alt text](png/overview_top_papers.png)
+
+- Author Explorer — Publications over time:
+    ![alt text](png/author_pubs_time.png)
+
+- Author Explorer — Citation distribution:
+    ![alt text](png/author_citation_box.png)
+
+- Author Explorer — Ego network: 
+    ![alt text](png/author_ego_network.png)
+
+- Topics & Clusters — Embedding scatter: 
+    ![alt text](png/topics_embedding_scatter.png)
+
+- Topics & Clusters — Topic heatmap:
+    ![alt text](png/topics_heatmap.png)
+
 - Sample authors CSV used: Download sample_authors.csv
+
+
+
+
+
 
 #### Final notes & next steps
 
