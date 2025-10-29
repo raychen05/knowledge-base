@@ -20,13 +20,13 @@ Below is a structured KPI framework + required data sources that your AI sys
 
 | KPI                                 | What it Measures                | Level                   | Source / How to Compute                        |
 |--------------------------------------|---------------------------------|-------------------------|------------------------------------------------|
-| **Total Publications*-               | Productivity                    | Individual & Team       | WoS/Scopus/Crossref                            |
-| **Top-journal Share*-                | Quality of venues               | Team                    | Journal quartiles (JIF, JCI, CiteScore)        |
-| **Citation Count / Citations per Paper*- | Scientific influence         | Individual, Team, Top 10 papers | Normalized citation metrics             |
-| **h-index & g-index*-                | Sustainable influence           | Individual              | From citation graph                            |
-| **Highly Cited Papers %*-            | Global recognition              | Team                    | WoS Highly Cited Researchers (HCR) list        |
-| **Field-Normalized Citation Impact (FNCI)*- | Impact relative to field   | Team                    | InCites / internal model                       |
-| **Altmetrics Impact*-                | Public attention                | Team                    | Altmetric / PlumX                              |
+| **Total Publications**               | Productivity                    | Individual & Team       | WoS/Scopus/Crossref                            |
+| **Top-journal Share**                | Quality of venues               | Team                    | Journal quartiles (JIF, JCI, CiteScore)        |
+| **Citation Count / Citations per Paper** | Scientific influence         | Individual, Team, Top 10 papers | Normalized citation metrics             |
+| **h-index & g-index**                | Sustainable influence           | Individual              | From citation graph                            |
+| **Highly Cited Papers %**            | Global recognition              | Team                    | WoS Highly Cited Researchers (HCR) list        |
+| **Field-Normalized Citation Impact (FNCI)** | Impact relative to field   | Team                    | InCites / internal model                       |
+| **Altmetrics Impact**                | Public attention                | Team                    | Altmetric / PlumX                              |
 
 ➡️ Goal: validate global influence, recognition, output consistency.
 
@@ -36,11 +36,11 @@ Below is a structured KPI framework + required data sources that your AI sys
 
 | KPI                           | What it Measures                  | Level                  | How to Compute                                   |
 |-------------------------------|-----------------------------------|------------------------|--------------------------------------------------|
-| **Topic Expertise Strength Index*- | Depth in specific domains         | Individual & Team      | Topic modeling on paper abstracts; cluster author vectors by topic strength |
-| **Interdisciplinary Breadth Score*- | Cross-field influence             | Team                   | Calculate entropy of subject category distribution across team publications  |
-| **Overlapping Expertise Graph*-     | Collaboration/knowledge redundancy | Team network           | Build graph of authors; compute similarity of expertise/topic vectors to identify overlap and complementarity |
+| **Topic Expertise Strength Index** | Depth in specific domains         | Individual & Team      | Topic modeling on paper abstracts; cluster author vectors by topic strength |
+| **Interdisciplinary Breadth Score** | Cross-field influence             | Team                   | Calculate entropy of subject category distribution across team publications  |
+| **Overlapping Expertise Graph**     | Collaboration/knowledge redundancy | Team network           | Build graph of authors; compute similarity of expertise/topic vectors to identify overlap and complementarity |
 
-**Supporting analyses:*-  
+**Supporting analyses:**  
 - Topic evolution timelines (track how team topics shift over time)  
 - Citation chains / causal citation maps (visualize influence paths between topics and authors)
 
@@ -53,9 +53,9 @@ Below is a structured KPI framework + required data sources that your AI sys
 
 | KPI                               | Meaning                          | How to Compute                                   |
 |------------------------------------|----------------------------------|--------------------------------------------------|
-| **Author Collaboration Density*-   | Team internal integration        | Co-authorship graph metrics (e.g., edge density, clustering coefficient) |
-| **External Collaboration Centrality*- | International & industry network | Affiliation mapping; compute PageRank or betweenness centrality on extended co-author/affiliation graph |
-| **Global Institutional Diversity Score*- | Cross-continent collaboration   | Calculate diversity index using institution country codes or embeddings |
+| **Author Collaboration Density**   | Team internal integration        | Co-authorship graph metrics (e.g., edge density, clustering coefficient) |
+| **External Collaboration Centrality** | International & industry network | Affiliation mapping; compute PageRank or betweenness centrality on extended co-author/affiliation graph |
+| **Global Institutional Diversity Score** | Cross-continent collaboration   | Calculate diversity index using institution country codes or embeddings |
 
 ➡️ Goal: influence reach + future collaboration potential.
 
@@ -66,10 +66,10 @@ Below is a structured KPI framework + required data sources that your AI sys
 
 | KPI                          | What it Evaluates                | Data Source / How to Compute                                      |
 |------------------------------|----------------------------------|-------------------------------------------------------------------|
-| **Grant Count & Total Funding*-     | Financial competitiveness         | Grant databases (e.g., NSF, NIH, EU CORDIS); sum of awarded grants |
-| **Grant Success Rate*-              | Ability to win funding            | Ratio of awarded grants to total submissions (requires submissions data) |
-| **Funding Diversification Index*-   | Reliance on single source         | Calculate proportion of funding by agency/type; diversity index    |
-| **Future Funding Alignment*-        | Fit to priority programs          | LLM-based semantic similarity between team topics and open calls   |
+| **Grant Count & Total Funding**     | Financial competitiveness         | Grant databases (e.g., NSF, NIH, EU CORDIS); sum of awarded grants |
+| **Grant Success Rate**              | Ability to win funding            | Ratio of awarded grants to total submissions (requires submissions data) |
+| **Funding Diversification Index**   | Reliance on single source         | Calculate proportion of funding by agency/type; diversity index    |
+| **Future Funding Alignment**        | Fit to priority programs          | LLM-based semantic similarity between team topics and open calls   |
 
 ➡️ Goal: assess the team’s competitiveness, resilience, and readiness for future funding opportunities.
 
@@ -82,10 +82,10 @@ Below is a structured KPI framework + required data sources that your AI sys
 
 | KPI                              | Meaning                       | How to Compute                                      |
 |-----------------------------------|-------------------------------|-----------------------------------------------------|
-| **Patent Count + Forward Citations*- | Technology maturation         | PatentsView/USPTO                                   |
-| **Tech Transfer Stage (TRL Score)*-  | Commercialization readiness   | Map patents/publications to TRL scale               |
-| **Industry Collaboration Score*-     | Applied relevance             | Identify industry affiliations among coauthors      |
-| **Policy/Guideline Citations*-       | Public sector impact          | Retrieve policy and patent citations                |
+| **Patent Count + Forward Citations** | Technology maturation         | PatentsView/USPTO                                   |
+| **Tech Transfer Stage (TRL Score)**  | Commercialization readiness   | Map patents/publications to TRL scale               |
+| **Industry Collaboration Score**     | Applied relevance             | Identify industry affiliations among coauthors      |
+| **Policy/Guideline Citations**       | Public sector impact          | Retrieve policy and patent citations                |
 
 ➡️ Goal: translational track record & commercialization potential.
 
@@ -97,9 +97,9 @@ Below is a structured KPI framework + required data sources that your AI sys
 
 | KPI                              | Measures                        | How to Compute                                             |
 |-----------------------------------|---------------------------------|------------------------------------------------------------|
-| **Advisor/PI Mentorship Index*-   | Research leadership quality     | Count of PhDs/postdocs graduated; track mentee career paths|
-| **Leadership in Academic Community*- | Reputation                  | Number of editorial roles, keynote/invited talks           |
-| **Diversity/DEI Indicators*-      | Funding & collaboration competitiveness | Analyze gender and country mix (optional, privacy-aware)   |
+| **Advisor/PI Mentorship Index**   | Research leadership quality     | Count of PhDs/postdocs graduated; track mentee career paths|
+| **Leadership in Academic Community** | Reputation                  | Number of editorial roles, keynote/invited talks           |
+| **Diversity/DEI Indicators**      | Funding & collaboration competitiveness | Analyze gender and country mix (optional, privacy-aware)   |
 
 ➡️ Goal: assess team credibility, mentorship strength, and future growth potential.
 
