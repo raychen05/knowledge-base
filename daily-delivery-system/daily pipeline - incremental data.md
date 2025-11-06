@@ -9,7 +9,7 @@ I added a focused section showing an automated pattern to detect affected UTSs (
 
 **Architecture*- (Mermaid)
 
-``text
+```text
 flowchart LR
   subgraph Upstream
     A[delta.table.A]
