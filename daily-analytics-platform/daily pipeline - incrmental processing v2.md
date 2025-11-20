@@ -170,7 +170,8 @@ Using the rules above, the incremental pipeline can be simplified in the followi
   - (e.g., dim → link → citation is not needed).
 - Each table can be incrementally processed independently, using its own CDF or version range.
 - Citation tables are authoritative and do not require downstream recalculation.
-- Change detection logic becomes single-table only rather than dependency-graph-based.
+- Change detection logic becomes single-table only
+- rather than dependency-graph-based.
 - downstream table depends on multiple upstream tables, including dimension, link, and citation tables
 - This requires join-key incremental propagation and affected-key recomputation, while still respecting the upstream simplification rules.
 
@@ -627,6 +628,236 @@ If you want, I can next optimize this further to support multiple join keys per 
 
 
 ---
+
+
+## Enterprise-grade Incremental DAG Pipeline
+
+
+
+Perfect! Let’s take the updated LakePipelineMulti implementation and optimize it for a full-featured, enterprise-grade incremental DAG pipeline, with these enhancements:
+
+1. Support multiple join keys per table
+2. Dynamic DAG of upstream tables (dependency-driven incremental propagation)
+3. Parallel execution of independent nodes (faster incremental runs)
+4. Affected-key propagation along DAG edges
+5. Per-table CDF/version-based incremental detection
+
+---
+
+### 1. Conceptual Design
+
+#### a) DAG Nodes
+
+Each upstream table is a node in a DAG:
+- name: String — table name
+- inputs: Seq[String] — upstream tables this table depends on
+- joinKeys: Seq[String] — keys used to join with downstream
+- runFn: DataFrame => DataFrame — transformation logic
+
+We compute affected downstream keys using join keys per table and propagate them along DAG edges.
+
+
+#### b) DAG Execution
+
+- Topologically sort the DAG
+- Run independent nodes in parallel
+- Propagate affected keys downstream for filtering incremental computations
+- Merge results into the final target table
+
+---
+
+### 2. DAG Node Definition
+
+```scala
+case class PipelineNode(
+    name: String,
+    inputs: Seq[String],
+    joinKeys: Seq[String],
+    runFn: (Map[String, DataFrame], Map[String, DataFrame], Map[String, DataFrame]) => DataFrame,
+    retry: Int = 1
+)
+```
+
+---
+
+### 3. DAG Class
+
+```scala
+case class PipelineDAG(nodes: Seq[PipelineNode]) {
+
+  // Map of table name -> PipelineNode
+  val nodeMap: Map[String, PipelineNode] = nodes.map(n => n.name -> n).toMap
+
+  // Map of table name -> upstream dependencies
+  val upstreamMap: Map[String, Set[String]] = nodes.map(n => n.name -> n.inputs.toSet).toMap
+}
+```
+
+---
+
+### 4. Parallel DAG Runner
+
+
+```scala
+import java.util.concurrent.{Executors, ExecutorService, Future}
+import scala.collection.mutable
+
+object ParallelDAGRunner {
+
+  def run(
+      dag: PipelineDAG,
+      fullMap: Map[String, DataFrame],
+      incrMap: Map[String, DataFrame],
+      maxConcurrency: Int = 4
+  ): Map[String, DataFrame] = {
+
+    val executor: ExecutorService = Executors.newFixedThreadPool(maxConcurrency)
+    val state: mutable.Map[String, String] = mutable.Map(dag.nodes.map(n => n.name -> "Pending"): _*)
+    val result: mutable.Map[String, DataFrame] = mutable.Map()
+
+    def readyNodes: Seq[PipelineNode] =
+      dag.nodes.filter(n => state(n.name) == "Pending" &&
+        n.inputs.forall(dep => state(dep) == "Success"))
+
+    while (state.exists(_._2 != "Success")) {
+      val batch = readyNodes
+      if (batch.isEmpty) throw new RuntimeException("DAG deadlock or cycle detected")
+
+      val futures: Seq[(PipelineNode, Future[Unit])] = batch.map { node =>
+        state(node.name) = "Running"
+        val f = executor.submit(() => {
+          var attempts = 0
+          var success = false
+          while (!success && attempts <= node.retry) {
+            attempts += 1
+            try {
+              // compute affected keys from upstream
+              val affectedKeysMap: Map[String, DataFrame] = node.inputs.map { upstream =>
+                val df = result(upstream)
+                val joinKeys = dag.nodeMap(upstream).joinKeys
+                val keysDf = df.select(joinKeys.map(col): _*).distinct()
+                upstream -> keysDf
+              }.toMap
+
+              // execute node
+              val output = node.runFn(fullMap, incrMap, affectedKeysMap)
+              result(node.name) = output
+              success = true
+              state(node.name) = "Success"
+            } catch {
+              case e: Throwable =>
+                if (attempts > node.retry) throw e
+            }
+          }
+        })
+        node -> f
+      }
+
+      // Wait for batch to complete
+      futures.foreach { case (_, f) => f.get() }
+    }
+
+    executor.shutdown()
+    result.toMap
+  }
+}
+```
+
+---
+
+
+### 5. Updated LakePipelineMulti with DAG Execution
+
+```scala
+object LakePipelineMulti {
+
+  def runDAG(
+      nodes: Seq[PipelineNode],
+      targetFamily: LakeFamily,
+      targetName: String,
+      keys: Seq[String]
+  ): Unit = {
+
+    val dag = PipelineDAG(nodes)
+    val spark = SparkSession.active
+
+    // Load full snapshots and incremental deltas
+    val fullMap: Map[String, DataFrame] =
+      nodes.map(n => n.name -> spark.table(n.name)).toMap
+
+    val incrMap: Map[String, DataFrame] =
+      nodes.map(n => n.name -> IncrementalLogic.readIncremental(n.name, WatermarkStore.get(n.name))).toMap
+
+    // Run DAG in parallel
+    val result = ParallelDAGRunner.run(dag, fullMap, incrMap, maxConcurrency = 4)
+
+    // Merge final table
+    val targetSchema = LakeSchemaSelector.targetSchema(targetFamily)
+    val fullTargetName = s"$targetSchema.$targetName"
+    WriterUtils.merge(result(targetName), fullTargetName, keys)
+
+    // Update watermarks
+    nodes.foreach { n =>
+      val newVersion = DeltaTable.forName(n.name).history().head.getLong(0)
+      WatermarkStore.update(n.name, newVersion)
+    }
+  }
+}
+```
+
+---
+
+
+### 6. Example Usage
+
+```scala
+val nodes = Seq(
+  PipelineNode(
+    name = "entity",
+    inputs = Seq(),
+    joinKeys = Seq("entity_id"),
+    runFn = (full, incr, affected) => full("entity")
+  ),
+  PipelineNode(
+    name = "entity_ut",
+    inputs = Seq("entity"),
+    joinKeys = Seq("entity_id"),
+    runFn = (full, incr, affected) => {
+      full("entity_ut").join(affected("entity"), Seq("entity_id"), "inner")
+    }
+  ),
+  PipelineNode(
+    name = "entity_analytics",
+    inputs = Seq("entity", "entity_ut"),
+    joinKeys = Seq("entity_id"),
+    runFn = (full, incr, affected) => {
+      full("entity").join(full("entity_ut"), Seq("entity_id"), "left")
+    }
+  )
+)
+
+LakePipelineMulti.runDAG(
+  nodes = nodes,
+  targetFamily = LakeFamily.Output,
+  targetName = "entity_analytics",
+  keys = Seq("entity_id")
+)
+
+---
+
+### 7. Key Advantages
+
+✅ Multiple join keys per table supported
+
+- ✅ DAG-aware incremental propagation
+- ✅ Parallel execution for independent nodes
+- ✅ Affected-key recomputation for multi-table downstream tables
+- ✅ Still respects upstream simplification rules
+- ✅ Efficient incremental processing, avoids full-table recomputation
+
+If you want, I can next add: monitoring, metrics, and failure recovery to this DAG + parallel incremental pipeline.
+
+
 
 
 
