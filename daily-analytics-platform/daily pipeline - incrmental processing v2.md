@@ -254,7 +254,7 @@ object LakePipelineMulti {
 }
 ```
 
-Where:
+**Where**:
 - Map[String, DataFrame] = full snapshots
 - Map[String, DataFrame] = incremental deltas
 
