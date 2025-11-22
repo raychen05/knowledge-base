@@ -1071,6 +1071,15 @@ object MetadataDrivenDLT {
 }
 ```
 
+
+Use the full enterprise pipeline from the previous response:
+- Reads metadata
+- Adds CDC flags
+- Performs incremental merge
+- Writes gold tables
+- Maintains audit logs
+
+
 ----
 
 ### ⭐ 4. DLT Pipeline Config: dlt_pipeline.json
@@ -1108,7 +1117,53 @@ object MetadataDrivenDLT {
 
 ---
 
-### ⭐ 5. Key Features of This Package
+### ⭐ 5. Audit Table
+
+
+```sql
+CREATE TABLE IF NOT EXISTS ag_content_ims_dev.audit.audit_log (
+  table_name STRING,
+  rows_inserted LONG,
+  rows_updated LONG,
+  rows_deleted LONG,
+  processed_at TIMESTAMP
+);
+
+```
+
+---
+
+### ⭐ 6. Downstream Pipeline Example
+
+daily_tach_pipeline.scala
+
+```scala
+val df = spark.table("ag_content_ims_dev.author_spm_joined")
+  .filter("is_new OR is_updated")
+
+df.write.format("delta")
+  .mode("append")
+  .saveAsTable("ag_content_ims_dev.daily_tach_author_spm")
+
+```
+
+analytics_pipeline.scala
+
+
+```scala
+val df = spark.table("ag_content_ims_dev.publication_author_joined")
+  .filter("is_new OR is_updated")
+
+val agg = df.groupBy("year").count()
+agg.write.format("delta")
+  .mode("overwrite")
+  .saveAsTable("ag_content_ims_dev.analytics_pub_year")
+
+```
+
+---
+
+### ⭐ 7. Key Features of This Package
 
 
 | Feature | Implementation |
@@ -1124,7 +1179,7 @@ object MetadataDrivenDLT {
 
 ---
 
-### ⭐ 6. Usage
+### ⭐ 8. Usage
 
 1. Deploy MetadataDrivenDLT.scala to /notebooks
 2. Create dlt_gold_config metadata table
