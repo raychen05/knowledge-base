@@ -1195,6 +1195,244 @@ If you want, I can also generate a ready-to-use sample repo structure with 6 exa
 
 
 
+---
+
+## Integrate a SQL-based DLT table 
+
+
+Absolutely! You can integrate a SQL-based DLT table into this Scala metadata-driven framework to specifically monitor f_publication updates and only filter rows where is_wos = true. This approach is fully compatible with the existing architecture and allows downstream pipelines to consume only the filtered gold table.
+
+Here’s how you can do it:
+
+### 1. Add a metadata row for the SQL DLT
+
+Insert into your dlt_gold_config table:
+```sql
+INSERT INTO ag_content_ims_dev.dlt_gold_config VALUES
+(
+  'publication_wos_gold',
+  'SELECT - 
+     FROM STREAM(LIVE.f_publication) 
+     WHERE is_wos = true',
+  ARRAY('pub_id'),  -- primary key
+  'Only WOS publications for downstream pipelines',
+  ARRAY('daily_tach_pipeline','analytics_pipeline')
+);
+```
+
+**Explanation**:
+- STREAM(LIVE.f_publication) → streams changes from f_publication table (CDF-enabled)
+- WHERE is_wos = true → filters only relevant rows
+- pub_id → primary key for merge/upsert
+- downstream_pipelines → pipelines that consume this table
+
+---
+
+### 2. SQL-based DLT Table Example
+
+You can also define this directly as a SQL DLT table without Scala, in a .sql notebook:
+
+```sql
+-- File: notebooks/dlt_publication_wos.sql
+CREATE LIVE TABLE publication_wos_gold
+TBLPROPERTIES ("pipelines.enableChangeDataFeed" = "true") AS
+SELECT *
+FROM STREAM(LIVE.f_publication)
+WHERE is_wos = true;
+```
+
+**Notes**:
+- CREATE LIVE TABLE automatically handles incremental updates using Delta CDF
+- You can add additional audit columns if needed:
+
+```sql
+ALTER LIVE TABLE publication_wos_gold
+ADD COLUMN is_new BOOLEAN AS (_change_type = 'insert');
+
+ALTER LIVE TABLE publication_wos_gold
+ADD COLUMN is_updated BOOLEAN AS (_change_type LIKE 'update%');
+
+ALTER LIVE TABLE publication_wos_gold
+ADD COLUMN is_deleted BOOLEAN AS (_change_type = 'delete');
+```
+
+---
+
+### 3. Integrating SQL DLT into the Scala metadata-driven framework
+
+
+- Keep the Scala pipeline for other metadata-driven tables.
+- Use the SQL DLT table for f_publication WOS filter.
+- Both can coexist in the same DLT pipeline or same Databricks workspace.
+
+**Advantages**:
+1. Downstream pipelines consume only WOS publications.
+2. No need to modify Scala pipeline for this special case.
+3. Allows mixing Scala-driven and SQL-driven DLT tables.
+4. Automatically benefits from Delta CDF incremental processing.
+
+---
+
+### 4. Example Downstream Pipeline Usage
+
+```scala
+val wosDF = spark.table("ag_content_ims_dev.publication_wos_gold")
+  .filter("is_new OR is_updated")
+
+wosDF.write.format("delta")
+  .mode("append")
+  .saveAsTable("ag_content_ims_dev.daily_tach_wos")
+```
+
+This ensures that your downstream pipeline only processes incremental WOS rows.
+
+---
+
+### ✅ Conclusion:
+
+- Yes, you can add a SQL DLT table alongside Scala DLT tables in the same enterprise framework.
+- Just use STREAM(LIVE.<table>) and filtering logic (WHERE is_wos = true).
+- Downstream pipelines will consume incremental updates efficiently.
+- Maintains consistency with your audit, metadata, and downstream pipelines.
+
+
+---
+
+## Data Retaining Policy - Comparison
+
+
+Let’s carefully analyze the three approaches in the context of enterprise-scale incremental pipelines, multiple upstream CDF tables, and downstream consumers, and see which is optimal.
+
+
+### Option 1: Keep a baseline in gold table on initial run
+
+- Description:
+  - Load the full initial snapshot of upstream tables into gold tables during the first run; after that, process only incremental updates.
+
+- Pros:
+    - Downstream pipelines have full historical data from day 1.
+    - Simplifies downstream logic; no need to join with source tables for historical context.
+    - Easier auditing and backfilling.
+
+- Cons:
+    - Initial run can be heavy if tables are large.
+    - Storage cost is higher.
+    - Potentially slow initial pipeline startup.
+
+Use case: Recommended when downstream processes require full historical context, e.g., analytics, reporting, or reconciliation.
+
+---
+
+### Option 2: Only handle new stream data, keep all existing data
+
+- Description:
+  - Gold tables are initially empty (or optional minimal snapshot); only new CDC rows are applied incrementally. Data is never purged.
+
+- Pros:
+    - Minimal storage overhead for initial load (can be empty).
+    - Incremental processing is very fast.
+    - Simplifies merging logic: only append or merge.
+
+- Cons:
+    - Downstream pipelines may miss historical data if needed.
+    - You need external mechanisms to backfill historical data if required.
+
+Use case: Optimal if:
+- Downstream pipelines only care about new/updated rows.
+- Storage cost and processing efficiency are important.
+
+---
+
+### Option 3: Only handle new stream data, purge old data after duration
+
+- Description:
+  - Process only incremental updates, but purge rows older than N days to limit table size.
+
+- Pros:
+    - Keeps storage under control.
+    - Efficient for rolling-window pipelines (e.g., 30-day operational data).
+    - Incremental pipeline remains lightweight.
+
+- Cons:
+    - Historical context is lost after purge.
+    - Downstream pipelines cannot query older data.
+    - Adds extra logic for purging and retention.
+
+Use case: Ideal for operational pipelines where only recent data matters and storage/performance is a concern.
+
+---
+
+### Optimal Recommendation
+
+For your scenario:
+- Multiple downstream pipelines consuming multiple upstream tables.
+- Serverless / Databricks pipelines with incremental processing.
+- Downstream pipelines may run daily and need affected rows.
+
+#### ✅ Option 1 is generally the safest for enterprise-grade pipelines:
+- Keep an initial baseline snapshot.
+- Then process incremental CDF updates only.
+- This ensures full data availability for downstream pipelines, auditability, and reproducibility.
+
+#### 💡 Optional enhancement:
+- Combine Option 1 + Option 3: Keep baseline + incremental updates, but purge historical data older than N years for very large tables to control storage.
+
+If you want, I can create a diagram and step-by-step strategy showing baseline load + incremental updates + optional purge, tailored for your Scala + SQL DLT framework. This will be a clear blueprint for production deployment.
+
+
+---
+
+
+**Scenario specifics**
+- Your gold table only stores key values (e.g., uid, author_key, sp_id), not full metadata.
+- Downstream pipelines join these keys with upstream tables to retrieve full metadata.
+- You care mostly about incremental affected rows.
+
+**Option Analysis**
+
+### Option 1: Baseline + incremental
+
+- Pros:
+    - Gold table contains all historical keys, so downstream can always retrieve full metadata without risk of missing joins.
+- Cons:
+    - Since you only store keys, the baseline load isn’t huge, but it still accumulates all historical keys.
+    - Over time, storage could grow, especially if keys are numerous.
+    - For a system processing millions of keys daily, unnecessary old keys may never be used again.
+
+
+### Option 3: Incremental + purge old keys
+- Pros:
+    - Gold table stays small, only holds recent keys relevant for downstream pipelines.
+    - Incremental load is lightweight.
+    - Downstream pipelines always process the latest affected rows.
+- Cons:
+    - If a downstream pipeline needs historical rows older than the purge threshold, data is no longer in the gold table → must fetch keys from upstream directly (or rerun upstream query).
+
+- Notes:
+    - Since your gold table only stores keys, and you rely on upstream tables for metadata, you rarely need all historical keys in the gold table.
+    - Purge threshold can be set conservatively (e.g., 30–90 days) to balance storage and downstream needs.
+
+### ✅ Recommendation
+
+Given your setup:
+- Gold table = subset of keys only
+- Metadata always retrieved from upstream
+- Downstream pipelines mostly process recent updates
+  →** Option 3 is optimal**.
+- Keep only recent keys, purge old ones after a defined duration.
+- Process incremental CDC updates only.
+- Keeps gold tables small and performant, without losing ability to join upstream for metadata.
+
+Optional safeguard:
+- Keep a longer retention window for highly critical keys (e.g., top authors or top publications).
+
+I can also draft a Scala + SQL DLT implementation for “incremental keys + purge after N days”, fully integrated into your current framework, including automated purging and audit logging.
+
+
+---
+
+
+
 
 
 
