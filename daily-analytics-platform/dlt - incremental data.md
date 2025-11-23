@@ -1442,7 +1442,7 @@ Implement Scala code to create an object or class that performs delta-change det
 2. A list of link tables (Delta format)
 3. A list of citation tables (Delta format)
 
-The output should be the set of affected primary keys (i.e., the delta keys that require downstream processing). These keys may be:
+The output should be the set of affected primary keys (i.e., the delta keys that require downstream processing).These keys may be:
 - A single key (e.g., pguid for researcher data), or
 - A composite key (e.g., document uid + author pguid).
 
