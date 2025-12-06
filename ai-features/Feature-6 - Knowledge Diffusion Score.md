@@ -5,18 +5,18 @@
 
 Nice — below is a practical, realistic, and runnable package for the Knowledge Diffusion Score feature. It includes:
 
-* A backend module (diffusion.py) with functions to compute embeddings, map citing papers to topic-space, compute diffusion metrics (breadth, depth, geographic spread, language spread, temporal diffusion), and combine them into a single Knowledge Diffusion Score.
-* A Streamlit UI (app.py) that accepts paper + citing-paper metadata (or sample data), displays an elegant metric card, and shows visualizations (topic scatter, discipline bars, country bars, timeline).
-* Sample input & output JSON and a realistic LLM prompt to generate human-readable explanations of the diffusion result.
-* All code is self-contained and easy to adapt to production data sources (OpenAlex, Semantic Scholar, CrossRef, internal DB).
+- A backend module (diffusion.py) with functions to compute embeddings, map citing papers to topic-space, compute diffusion metrics (breadth, depth, geographic spread, language spread, temporal diffusion), and combine them into a single Knowledge Diffusion Score.
+- A Streamlit UI (app.py) that accepts paper + citing-paper metadata (or sample data), displays an elegant metric card, and shows visualizations (topic scatter, discipline bars, country bars, timeline).
+- Sample input & output JSON and a realistic LLM prompt to generate human-readable explanations of the diffusion result.
+- All code is self-contained and easy to adapt to production data sources (OpenAlex, Semantic Scholar, CrossRef, internal DB).
 
 Design summary (short)Compute embeddings for the paper and its citing papers → cluster / project them in topic space → measure spread by:
 
-* Breadth: entropy across disciplines / clusters
-* Depth: average cosine distance from the original paper (how conceptually distant)
-* Geographic spread: normalized unique country coverage & entropy
-* Language spread: number of citing-languages
-* Temporal diffusion: speed of arrival across time bucketsCombine these signals into a single normalized Knowledge Diffusion Score (0–100).
+- Breadth: entropy across disciplines / clusters
+- Depth: average cosine distance from the original paper (how conceptually distant)
+- Geographic spread: normalized unique country coverage & entropy
+- Language spread: number of citing-languages
+- Temporal diffusion: speed of arrival across time bucketsCombine these signals into a single normalized Knowledge Diffusion Score (0–100).
 
 
 ### 1) Backend: diffusion.py
@@ -124,7 +124,7 @@ def cluster_topics(embeddings: np.ndarray, k: int = 4) -> List[int]:
     """KMeans clusters (return labels). If few points, return zeros."""
     n = embeddings.shape[0]
     if n <= 1:
-        return [0] * n
+        return [0] - n
     k = min(k, max(1, n//2))
     km = KMeans(n_clusters=k, random_state=42)
     labels = km.fit_predict(embeddings)
@@ -137,7 +137,7 @@ def shannon_entropy(proportions: List[float]) -> float:
     ps = np.array([p for p in proportions if p > 0.0])
     if len(ps) == 0:
         return 0.0
-    return -float(np.sum(ps * np.log(ps))) / math.log(2)  # bits (base-2) normalized not by max
+    return -float(np.sum(ps - np.log(ps))) / math.log(2)  # bits (base-2) normalized not by max
 
 def normalized_entropy(counter: Dict[Any, int]) -> float:
     total = sum(counter.values()) or 1
@@ -279,7 +279,7 @@ def compute_knowledge_diffusion_score(paper: Dict[str, Any], citations: List[Dic
                  comp_temporal*weights["temporal"])
 
     # scale to 0..100
-    diffusion_score = round(raw_score * 100, 2)
+    diffusion_score = round(raw_score - 100, 2)
 
     # Format output
     result = {
@@ -415,8 +415,8 @@ if analyze:
     c1, c2, c3 = st.columns([2,1,1])
     with c1:
         st.subheader(res["paper"]["title"])
-        st.markdown(f"**DOI:** {res['paper'].get('doi','-')}")
-        st.markdown(f"**Citations considered:** {res['n_citations']}")
+        st.markdown(f"**DOI:*- {res['paper'].get('doi','-')}")
+        st.markdown(f"**Citations considered:*- {res['n_citations']}")
     with c2:
         st.metric("Knowledge Diffusion Score", f"{res['diffusion_score']} / 100")
     with c3:
@@ -538,13 +538,13 @@ Produce a short paragraph (2–3 sentences).
 
 ### 5) Production notes & improvements
 
-* Real data sources: Replace fetch_citations() with OpenAlex / Semantic Scholar fetches. Those APIs provide citing-paper metadata (venue, affiliations, language, year, doi).
-* Discipline mapping: Replace heuristic venue keyword mapping with LLM classifier or use Crossref subject categories / MAG fields / OpenAlex concept taxonomy.
-* Embeddings: For large-scale production, use a dedicated embedding service (OpenAI embeddings, Cohere, or a higher-capacity sentence-transformer) and cache embeddings for citations.
-* Scalability: For papers with thousands of citations, do sampling (e.g., stratified by year and venue) or incremental streaming computation with precomputed embeddings.
-* Diffusion modeling: The current aggregator is a weighted linear combination. For advanced modeling, consider diffusion models (SI / SIR analogs) on citation networks or temporal point-process models to estimate reproduction number (R) of ideas.
-* Normalization / calibrations: Calibrate component weights on a labeled dataset of papers known to have broad diffusion (policy-cited, cross-disciplinary reviews, etc.).
-* Visualization: Consider interactive Plotly charts and world choropleth for geographic spread.
+- Real data sources: Replace fetch_citations() with OpenAlex / Semantic Scholar fetches. Those APIs provide citing-paper metadata (venue, affiliations, language, year, doi).
+- Discipline mapping: Replace heuristic venue keyword mapping with LLM classifier or use Crossref subject categories / MAG fields / OpenAlex concept taxonomy.
+- Embeddings: For large-scale production, use a dedicated embedding service (OpenAI embeddings, Cohere, or a higher-capacity sentence-transformer) and cache embeddings for citations.
+- Scalability: For papers with thousands of citations, do sampling (e.g., stratified by year and venue) or incremental streaming computation with precomputed embeddings.
+- Diffusion modeling: The current aggregator is a weighted linear combination. For advanced modeling, consider diffusion models (SI / SIR analogs) on citation networks or temporal point-process models to estimate reproduction number (R) of ideas.
+- Normalization / calibrations: Calibrate component weights on a labeled dataset of papers known to have broad diffusion (policy-cited, cross-disciplinary reviews, etc.).
+- Visualization: Consider interactive Plotly charts and world choropleth for geographic spread.
 
 
 ### 6) Quick test recipe
@@ -556,6 +556,6 @@ Produce a short paragraph (2–3 sentences).
 
 ### If you want, I can:
 
-* Wire the Streamlit UI to OpenAlex or Semantic Scholar to fetch real citations (I’ll give the exact API call code).
-* Add a calibration notebook to tune component weights on a labeled set of known-high-diffusion papers.
-* Add interactive Plotly maps (world choropleth) for country spread.
+- Wire the Streamlit UI to OpenAlex or Semantic Scholar to fetch real citations (I’ll give the exact API call code).
+- Add a calibration notebook to tune component weights on a labeled set of known-high-diffusion papers.
+- Add interactive Plotly maps (world choropleth) for country spread.
