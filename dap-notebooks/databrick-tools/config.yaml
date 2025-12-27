@@ -1,0 +1,98 @@
+runtime_env: dev
+output_path: v_1_0_1
+
+# DAP source & target catalog Configuration
+
+# DAP source catalog Configuration
+source_environment: prod
+source_catalog_name: ag_content
+source_schema_version: v_1_0_1
+source_udm_catalog_name: ag_content_udm
+# DAP target catalog Configuration
+target_environment: dev
+target_catalog_name: ra_analytics_data
+target_schema_version: v_1_0_1
+
+# scheamas to be processed
+acs_schemas:
+  - gold_entity
+  - gold_wos
+  - gold_pprn
+
+udm_schemas:
+  - patent_org_relationship 
+  - researcher_grants_relationship 
+  - topic_model
+
+dap_schema:
+  - dap_entity_wos
+  - dap_metrics_wos
+  - dap_entity_pprn
+  - dap_metrics_pprn
+  - dap_docs
+  - dap_grant
+  - dap_prod_core
+
+  - dap_reference
+  - dap_sort_ref
+  - dap_entity_enrich
+  - dap_ops
+  - dap_work
+
+
+
+# APIs and tokens for Rest API calls
+prod_url: "https://org-ag-prod.cloud.databricks.com"
+prod_token: ""
+
+dev_url: "https://org-ag-dev.cloud.databricks.com"
+dev_token: ""
+
+# Databricks SQL Client configuration
+prod_server_hostname: "org-ag-prod.cloud.databricks.com"
+prod_http_path: "/sql/1.0/warehouses/xxxxxxx"
+prod_access_token: ""
+
+dev_server_hostname: "org-ag-dev.cloud.databricks.com"
+dev_http_path: "/sql/1.0/warehouses/xxxxxxx"
+dev_access_token: ""
+
+
+# for schema comparison
+cp_left_schema_version: _
+cp_right_schema_version: v_1_0_1
+# for job bundle release
+bundle_release_version: 1.3
+
+# DAP operations schema and clone schemas
+ops_schema: dap_ops
+clone_schemas:
+  - dap_reference
+  - dap_sort_ref
+  
+# parameters for watermark operation
+ops_table_name: dap_watermarks
+watermark_type: baseline
+#  BASELINE = "baseline" INCREMENTAL = "incremental"    DUMPY = "dumpy"
+
+# DAP metadata tables - registry and upstream task
+registry_table_name: dap_pipeline_registry
+upstream_table_name: dap_pipeline_task_upstream
+
+# SQL files for DAP maintenance operations
+create_ops_tables_sql_file: ddl/create_ops_tables.sql
+optimize_dap_tables_sql_file: ddl/optimize_dap_tables.sql
+
+insert_registry_sql_file: insert_dap_pipeline_registry.sql
+insert_task_sql_file: insert_da_task_upstream.sql
+insert_watermarks_sql_file: insert_watermarks.sql
+create_table_schema_sql_file: create_dap_table_schema.sql
+
+#  files for pipeline metadata and lineage info
+pipeline_metadata_file: pipeline_metadata
+dap_lineage_file: dap_lineage.csv
+acs_schema_info_file: acs_schema_info.json
+acs_tables_version_info_file: acs_version_info.json
+dap_schema_info_file: dap_schema_info.json
+dap_pipeline_metadata_file: pipeline_metadata.json
+
