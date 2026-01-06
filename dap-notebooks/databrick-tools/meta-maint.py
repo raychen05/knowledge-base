@@ -1,5 +1,6 @@
 from asyncio import tasks
 import email
+from fileinput import filename
 import sys
 import os
 from xxlimited import Str
@@ -14,27 +15,21 @@ from pathlib import Path
 from typing import List, Dict, Any, Sequence, Optional, Tuple
 import pandas as pd
 from enum import Enum
-from dataclasses import dataclass
-
+from dataclasses import dataclass, field
+from textwrap import dedent
 
 # -------------------------------------------------------------------
 # General Config and Feature class
 # -------------------------------------------------------------------
 @dataclass
 class FeatureContext:
-    catalog_name: Optional[str] = None 
-    schemas: Optional[list] = None 
-    version: Optional[str] = None  
-    environment: Optional[str] = None  
-    filename: Optional[str] = None 
-    output_path: Optional[str] = None
-    trait_name: Optional[str] = None                 # trait name - ACS, DAP, UDM.           -- acs_trait
-    ops_table_name: Optional[str] = None             # table - watermark, registry or task   -- pipeline_metadata, insert_watermark
-    left_schema: Optional[dict] = None               # left schema info for diff             -- diff_acs_schema
-    right_schema: Optional[dict] = None              # right schema info for diff            -- diff_acs_schema
-    source_version: Optional[str] = None             # source version for clone schema.      -- clone_dap_schemas
-    target_version: Optional[str] = None             # target version for clone schema.      -- clone_dap_schemas
-    src_environment: Optional[str] = None         # source environment for lineage        -- generate_pipeline_lineages
+    params: Dict[str, Any] = field(default_factory=dict)
+
+    def __init__(self, **kwargs):
+        object.__setattr__(self, "params", kwargs)
+
+    def __getattr__(self, item):
+        return self.params.get(item)
 
 class ConfigInfo:
 
@@ -75,10 +70,13 @@ class ConfigInfo:
         self.insert_task_sql_file = cfg.get("insert_task_sql_file", "ddl/insert_da_task_upstream.sql")
         self.insert_registry_sql_file = cfg.get("insert_registry_sql_file", "ddl/insert_dap_pipeline_registry.sql")
         self.pipeline_metadata_file = cfg.get("pipeline_metadata_file", "pipeline_metadata")
-        self.dap_lineage_file = cfg.get("dap_lineage_file", "dap_lineage.csv")
-        self.acs_schema_info_file = cfg.get("acs_schema_info_file", "acs_schema_info.json")
-        self.dap_schema_info_file = cfg.get('dap_schema_info_file', 'dap_schema_info.json')
-
+        
+        self.dap_lineage_file = cfg.get("dap_lineage_file", "dap_lineage")
+        self.acs_schema_info_file = cfg.get("acs_schema_info_file", "acs_schema_info")
+        self.dap_schema_info_file = cfg.get('dap_schema_info_file', 'dap_schema_info')
+        self.acs_table_relation_file = cfg.get("acs_table_relation_file", "acs_table_relation") 
+        self.dap_job_list_file = cfg.get("dap_job_list_file", "dap_job_list")
+        self.dap_table_relation_file = cfg.get("dap_table_relation_file", "dap_table_relation")
 
         self.acs_schemas = cfg.get("acs_schemas", [
             "gold_entity",
@@ -113,42 +111,7 @@ class ConfigInfo:
 # -------------------------------------------------------------------
 class Utils:
 
-    # extract  job meta data from job settings tags
-    def parse_tags(
-            self,
-            data: dict,
-            release_version: str = "1.3"
-        ) -> dict:
-
-        jobs = []
-        for job in data.get("jobs", []):
-            job_id = job.get("job_id")
-            # Safe extraction of on_failure email
-            email_on_failure = (
-                job.get("settings", {})
-                    .get("email_notifications", {})
-                    .get("on_failure")
-            )
-            # Flatten tags if present
-            name = job.get('settings', {}).get('name').split("_")[0]
-            version = job.get('settings', {}).get('name').split("_")[-1]
-            tags = job.get("settings", {}).get("tags", {})
-            flat_tags = {f"tag_{k}": v for k, v in tags.items()}
-
-            # Combine all info
-            if(flat_tags and flat_tags['tag_Product'] == "wosri" and version == release_version):
-                job_info = {
-                    "job_id": job_id,
-                    "name": name,
-                    "email_on_failure": email_on_failure,
-                    **flat_tags
-                }
-
-                jobs.append(job_info)
-
-        return jobs
-
-    # extract name from email address
+      # extract name from email address
     def name_from_email(
             self, email: str) -> str:
         local_part = email.split("@")[0]
@@ -211,18 +174,6 @@ class Utils:
                 row += "\n"
             f.write(row)
 
-    # get first macthed ID from two lists
-    def first_matched_id(
-            self, a, b):
-        """
-        Return the first ID from list `a` that is also in list `b`.
-        Returns None if no match is found.
-        """
-        b_set = set(b)  # fast lookups
-        for x in a:
-            if x in b_set:
-                return x
-        return None
 
     # dump JSON data to a file
     def dump_json_to_file(
@@ -253,46 +204,6 @@ class Utils:
                     raise ValueError(f"Invalid JSON on line {line_no}: {e}")
 
         return rows
-
-    # sort tables and columns
-    def sort_tables_and_columns(
-            self,
-            tables: list[dict]
-        ) -> list[dict]:
-
-        """
-        Sort tables by full_name (ASC),
-        and sort columns by column name (ASC) inside each table.
-        """
-
-        # Sort columns inside each table
-        for table in tables:
-            columns = table.get("columns", [])
-            if isinstance(columns, list):
-                columns.sort(key=lambda c: c.get("name", ""))
-
-        # Sort tables by full_name
-        return sorted(tables, key=lambda t: t.get("full_name", ""))
-
-    # filter table fields based on specified columns
-    def filter_table_fields(
-            self,
-            table_dict: dict, 
-            filter_columns: list | None
-        ) -> dict:
-
-        """
-        Reduce table_dict to only keys in filter_columns.
-        If filter_columns is None, return all fields.
-        """
-        if not filter_columns:
-            return table_dict
-
-        return {
-            k: v
-            for k, v in table_dict.items()
-            if k in filter_columns
-        }
 
     def ensure_path_exists(
             self,
@@ -325,6 +236,17 @@ class Utils:
         with open(path, "r") as f:
             return yaml.safe_load(f) or {}
     
+    def delete_file(self, file_path: str) -> None:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    
+
+    def load_json_file(self, file_path: str) -> Any:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+
+
 # -------------------------------------------------------------------
 # Databricks API Client Functions
 # -------------------------------------------------------------------
@@ -407,6 +329,40 @@ class DatabricksAPIClient:
         Returns:
             list of jobs
         """
+        # extract  job meta data from job settings tags
+        def parse_tags(
+                data: dict,
+                release_version: str = "1.3"
+            ) -> dict:
+
+            jobs = []
+            for job in data.get("jobs", []):
+                job_id = job.get("job_id")
+                # Safe extraction of on_failure email
+                email_on_failure = (
+                    job.get("settings", {})
+                        .get("email_notifications", {})
+                        .get("on_failure")
+                )
+                # Flatten tags if present
+                info = job.get('settings', {}).get('name')
+                name = info.split("_")[0]
+                version = info.split("_")[-1]
+                tags = job.get("settings", {}).get("tags", {})
+                flat_tags = {f"tag_{k}": v for k, v in tags.items()}
+              # Combine all info
+                if flat_tags and str(flat_tags['tag_Product']) == 'wosri' and str(flat_tags['tag_Environment']) == 'uat': # and str(version) == release_version
+                    job_info = {
+                        "job_id": job_id,
+                        "name": name,
+                        "email_on_failure": email_on_failure,
+                        **flat_tags
+                    }
+                    jobs.append(job_info)
+
+            return jobs
+
+
 
         job_list = []
         next_page_token = None
@@ -418,14 +374,14 @@ class DatabricksAPIClient:
                     params = params,
                     environment= environment
                 )
-            jobs = self.utils.parse_tags(data, release_version)
+
+            jobs = parse_tags(data, release_version)
             job_list.extend(jobs or [])
             
             if data.get("has_more"):
                 next_page_token = data.get("next_page_token")
             else:
                 break
-           
         return job_list
      
     def fetch_job_details(
@@ -438,7 +394,7 @@ class DatabricksAPIClient:
         Returns:
             job details dict
         """
-
+        print(f"Fetching job details for job_id: {job_id} in {environment} environment")
         return  self.call_api( 
                 url = "/api/2.1/jobs/get", 
                 params =  {"job_id": job_id},
@@ -553,6 +509,26 @@ class DatabricksAPIClient:
             list of dict: Each dict represents a table with requested metadata
         """
 
+        # filter table fields based on specified columns
+        def filter_table_fields(
+                table_dict: dict, 
+                filter_columns: list | None
+            ) -> dict:
+
+            """
+            Reduce table_dict to only keys in filter_columns.
+            If filter_columns is None, return all fields.
+            """
+            if not filter_columns:
+                return table_dict
+
+            return {
+                k: v
+                for k, v in table_dict.items()
+                if k in filter_columns
+            }
+
+
         data = self.fetch_tables(
                 catalog_name=catalog_name,
                 schema_name=schema_name,
@@ -593,7 +569,7 @@ class DatabricksAPIClient:
             }
             
             tables_info.append(
-                self.utils.filter_table_fields(table_dict, filter_columns)
+                filter_table_fields(table_dict, filter_columns)
             )
 
         return tables_info
@@ -612,6 +588,26 @@ class DatabricksAPIClient:
         Returns:
             list of dict: Each dict represents a table with requested metadata
         """
+        
+        # sort tables and columns
+        def sort_tables_and_columns(
+                tables: list[dict]
+            ) -> list[dict]:
+
+            """
+            Sort tables by full_name (ASC),
+            and sort columns by column name (ASC) inside each table.
+            """
+
+            # Sort columns inside each table
+            for table in tables:
+                columns = table.get("columns", [])
+                if isinstance(columns, list):
+                    columns.sort(key=lambda c: c.get("name", ""))
+
+            # Sort tables by full_name
+            return sorted(tables, key=lambda t: t.get("full_name", ""))
+
 
         all_tables = []
         catalog_name = f"{catalog_name}_{environment}"
@@ -626,7 +622,7 @@ class DatabricksAPIClient:
                 )
             all_tables.extend(tables)
         
-        all_tables = self.utils.sort_tables_and_columns(all_tables)
+        all_tables = sort_tables_and_columns(all_tables)
 
         return all_tables
 
@@ -695,40 +691,6 @@ class DatabricksAPIClient:
 
         return upstreams, downstreams
 
-    # get table lineage info (upstream )for specified table and write to csv
-    def fetch_table_upstream_lineage_csv(
-            self,
-            schema: str, 
-            table_name: str, 
-            environment: str,
-            filename: str 
-        ) -> None:
-        """
-        Fetches table lineage info from Databricks API and returns upstreams and downstreams.
-        Returns:
-            tuple: (upstreams, downstreams), each is a list of dicts with requested fields
-        """
-
-        upstreams, downstreams = self.fetch_table_lineage(
-                    table_name=table_name, 
-                    environment=environment
-                )
-
-        # parse upstreams
-        def extract_tables(schema: str, tables_list, filename: str ):
-
-            for t in tables_list:
-                # Extract job_id correctly
-                catalog_name = t.get("catalog_name")
-                schema_name = t.get("schema_name")
-                name = t.get("name")
-                full_table_name = f"{catalog_name}.{schema_name}.{name}"
-                csv_line = f"{schema},{table_name},{full_table_name}"
-
-                self.utils.append_csv_line(csv_line, filename )
-
-        extract_tables(schema, upstreams, filename=filename)
-
     # get job's tasks for specified job id
     def fetch_tasks(
             self,
@@ -780,76 +742,15 @@ class DatabricksAPIClient:
 
         # Parse and flatten job info
         deduped = list({item["name"]: item for item in data}.values())
-
+        print(f"Total jobs after deduplication: {len(deduped)}")
         return deduped
-
-    # generate table lineage info (upstream )for specified downstream table and pipeline
-    def fetch_pipeline_lineages(
-            self,
-            table_name: str, 
-            environment: str,
-            job_list: list = None
-        ) -> list:
-
-        print(
-                f"generatePipelineLineages: table_name={table_name}"
-            )
-        
-        upstreams, downstreams = self.fetch_table_lineage(
-                    table_name=table_name,
-                    environment=environment
-                )
-
-        task_list = []
-
-        job_ids = [job["job_id"] for job in job_list]
-
-        for t in upstreams:
-            print(f"Processing upstream table: {t}")
-
-            job_id = self.utils.first_matched_id( t['job_ids'], job_ids ) if job_ids else True
-            if job_id:
-
-                tasks = self.fetch_tasks(
-                            job_id=job_id, 
-                            environment=environment
-                        )
-                # print(f"  Found matching job_id: {job_id} with tasks: {tasks}")
-
-                job_info = next((j for j in job_list if j["job_id"] == job_id), None)
-
-                emails = job_info.get("email_on_failure") or []
-                emails = emails if isinstance(emails, list) else [emails]
-
-                owner = self.utils.name_from_email(emails[0]) if emails else ""
-                email = ",".join(emails)
-
-                # print(f"  Job info: {job_info}")
-                if job_info:
-                    task_list.append({
-                        "pipeline": job_info['name'], #job_info['tag_Component'],
-                        "owner": owner, # job_info['tag_Owner'],
-                        "product": job_info['tag_Product'],
-                        "email": email, # job_info['email_on_failure'],
-                        # "job_id": str(job_info['job_id']),
-                        "tasks": tasks,
-                        # "name": t['name'],
-                        "downstream_table": table_name,
-                        "upstream_table": t['name'],
-                        "upstream_catalog_name": t['catalog_name'],
-                        "upstream_schema_name": t['schema_name'],
-                        "upstream_table_type": t['table_type'],
-                    })
-
-        task_list.sort(key=lambda x: (x['pipeline'], x['downstream_table']))
-        return task_list
 
 
 # -------------------------------------------------------------------
 # Feature Function 
 # -------------------------------------------------------------------
 
-class DapFeatures:
+class DapMetaManager:
 
     def __init__(self):
 
@@ -864,6 +765,7 @@ class DapFeatures:
                             trait_name="ACS",
                             version=kwargs.get("version", self.src_schema_version),
                             environment=kwargs.get("environment", self.src_environment),
+                            pk_relation_file=kwargs.get("pk_relation_file", self.acs_table_relation_file),
                             output_path=kwargs.get("output_path", self.output_path)
                         ),
             "dap_trait": lambda kwargs:FeatureContext(
@@ -906,6 +808,22 @@ class DapFeatures:
                     filename =self.acs_schema_info_file,
                     output_path=kwargs.get("output_path", self.output_path) 
                 ),
+            "acs_relations":  lambda kwargs:FeatureContext(
+                    catalog_name = self.src_catalog_name, 
+                    schemas = self.acs_schemas,
+                    environment = kwargs.get("environment", self.src_environment),
+                    version = kwargs.get("version", self.src_schema_version),
+                    filename =self.acs_table_relation_file,
+                    output_path=kwargs.get("output_path", self.output_path) 
+                ),
+            "dap_relations":  lambda kwargs:FeatureContext(
+                    catalog_name = self.tgt_catalog_name, 
+                    schemas = self.dap_schemas,
+                    environment = kwargs.get("environment", self.tgt_environment),
+                    version = kwargs.get("version", self.tgt_schema_version),
+                    filename =self.dap_table_relation_file,
+                    output_path=kwargs.get("output_path", self.output_path) 
+                ),
             "dap_schema": lambda kwargs:FeatureContext(
                     catalog_name = self.tgt_catalog_name, 
                     schemas = self.dap_schemas,
@@ -931,7 +849,7 @@ class DapFeatures:
                         "filename": f"acs_schema_{kwargs.get('right_version', self.right_schema_version)}.json",
                         "output_path": kwargs.get("output_path",self.output_path) 
                     },
-                    filename = self.acs_schema_info_file,
+                    filename = f"diff_{self.acs_schema_info_file}",
                     output_path=kwargs.get("output_path", self.output_path) 
                 ),
             "list_jobs": lambda kwargs:FeatureContext(
@@ -950,9 +868,11 @@ class DapFeatures:
             "pipeline_metadata": self.generate_pipeline_metadata,
             # schema management features
             "acs_schema": self.fetch_table_schema_info,
+            "acs_relations": self.generate_tables_pk,
             "dap_schema": self.fetch_table_schema_info,
+            "dap_relations": self.generate_tables_pk,
             "diff_schema": self.diff_tables_schema,
-            "list_jobs": self.fetch_dap_jobs_list
+            "list_jobs": self.fetch_dap_jobs_list,
         }
 
     def __getattr__(self, name):
@@ -962,21 +882,27 @@ class DapFeatures:
     # Feature Helper Function 
     # -------------------------------------------------------------------
     
-    def fetch_dap_jobs_list(self, ctx: FeatureContext):
-        """
-        Fetch and return the list of DAP-related jobs in the specified environment.
-        """
-        job_list = self.api.fetch_jobs_list(
-                release_version= self.release_version, 
-                environment=ctx.environment
-            )
-
-        for row in job_list:
-            d = json.dumps(row)
-            self.utils.append_csv_line(d,  f"{ctx.output_path}/dap_job_list.csv")
-
-        return job_list
+    #  helper function for generate_pipeline_metadata
     
+    def save_feature_result(
+            self,
+            data: List[Dict],
+            filename: str
+        ) -> Any:
+        """
+        Save feature data to files (csv, json, excel).
+        """
+
+        filename = filename.rstrip(".json").rstrip(".csv").rstrip(".xlsx")
+        self.utils.delete_file( f"{filename}.csv")
+
+        self.utils.dump_json_to_file(data, f"{filename}.json")
+        # self.utils.save_to_file(data, f"{filename}.csv")
+
+        df = pd.read_json( f"{filename}.json")
+        df.to_csv(f"{filename}.csv", index=False)
+        df.to_excel(f"{filename}.xlsx", index=False)
+
     # compare table schema between two versions
     def compare_table_schemas(
         self,
@@ -1155,6 +1081,7 @@ class DapFeatures:
         # Write to Excel
        # df.to_excel(output_file, index=False)
 
+
     # build  structured data for pipelines from flat rows (pipeline meta, downstream_table, upstream_table)
     def build_pipeline_structured_data(
             self,
@@ -1236,7 +1163,7 @@ class DapFeatures:
     pipeline_name,
     type,
     owner,
-    prodcut,
+    product,
     email,
     description,
     upstream_tables,
@@ -1260,49 +1187,6 @@ class DapFeatures:
 
         return sql_statements
 
-
-    # build structured data for pipeline tasks (task - upstreams) from flat rows (pipeline, task, upstream_table)
-    def build_pipeline_task_rows(
-            self,
-            rows: List[Dict[str, Any]]
-        ) -> List[Dict[str, Any]]:
-
-        tasks: Dict[tuple, Dict[str, Any]] = {}
-
-        for row in rows:
-            pipeline = row.get("pipeline", "")
-            task_name = row.get("downstream_table", "").split(".")[-1]
-
-            key = (pipeline, task_name)
-
-            if key not in tasks:
-                tasks[key] = {
-                    "pipeline_name": pipeline,
-                    "task_name": task_name,
-                    "upstream_tables": set(),
-                }
-
-            upstream = row.get("upstream_table")
-        # if upstream and upstream != "<JOB_ONLY_UPSTREAM>":
-        #     tasks[key]["upstream_tables"].add(upstream)
-
-            if upstream:
-                if upstream == "<JOB_ONLY_UPSTREAM>": continue
-                tableFullName = f"{row['upstream_catalog_name']}.{row['upstream_schema_name']}.{row['upstream_table']}"
-                tasks[key]["upstream_tables"].add(tableFullName) 
-
-        # Convert sets to lists for export
-        result = []
-        for task in tasks.values():
-            result.append({
-                "pipeline_name": task["pipeline_name"],
-                "task_name": task["task_name"],
-                "upstream_tables": sorted(task["upstream_tables"]),
-            })
-
-        return result
-
-
     # build SQL INSERT statements for pipeline task metadata 
     def build_pipelines_task_insert_sql(
         self,
@@ -1311,8 +1195,49 @@ class DapFeatures:
     ) -> List[str]:
         tasks: Dict[str, Dict[str, Any]] = {}
 
+         # build structured data for pipeline tasks (task - upstreams) from flat rows (pipeline, task, upstream_table)
+        def build_pipeline_task_rows(
+                rows: List[Dict[str, Any]]
+            ) -> List[Dict[str, Any]]:
+
+            tasks: Dict[tuple, Dict[str, Any]] = {}
+
+            for row in rows:
+                pipeline = row.get("pipeline", "")
+                task_name = row.get("downstream_table", "").split(".")[-1]
+
+                key = (pipeline, task_name)
+
+                if key not in tasks:
+                    tasks[key] = {
+                        "pipeline_name": pipeline,
+                        "task_name": task_name,
+                        "upstream_tables": set(),
+                    }
+
+                upstream = row.get("upstream_table")
+            # if upstream and upstream != "<JOB_ONLY_UPSTREAM>":
+            #     tasks[key]["upstream_tables"].add(upstream)
+
+                if upstream:
+                    if upstream == "<JOB_ONLY_UPSTREAM>": continue
+                    tableFullName = f"{row['upstream_catalog_name']}.{row['upstream_schema_name']}.{row['upstream_table']}"
+                    tasks[key]["upstream_tables"].add(tableFullName) 
+
+            # Convert sets to lists for export
+            result = []
+            for task in tasks.values():
+                result.append({
+                    "pipeline_name": task["pipeline_name"],
+                    "task_name": task["task_name"],
+                    "upstream_tables": sorted(task["upstream_tables"]),
+                })
+
+            return result
+
+
         # Aggregate by pipeline
-        tasks = self.build_pipeline_task_rows(rows)
+        tasks = build_pipeline_task_rows(rows)
         # Generate SQL per pipeline
         sql_statements = []
         for p in tasks:
@@ -1340,121 +1265,110 @@ class DapFeatures:
         return sql_statements
 
 
-    # generate scala case objects (scala file) from table schema (Active version)
-    def generate_case_objects(
-        self,
-        catalog_name: str,
-        table_schema: list,
-        output_path: str,
-        trait_name: str
-    ) -> None:
-        """
-        Generate Scala sealed trait and case objects from Unity Catalog table metadata.
+    # generate table lineage info (upstream )for specified downstream table and pipeline
+    def fetch_pipeline_lineages(
+            self,
+            table_name: str, 
+            environment: str,
+            job_list: list = None
+        ) -> list:
 
-        Features:
-        - Alphabetical sorting
-        - Sealed trait generation
-        - Duplicate validation
-        - Writes output to .scala file
-        """
+        print(
+                f"generatePipelineLineages: table_name={table_name}"
+            )
 
-        # ---------- Helpers ----------
-
-        def to_camel_case(s: str) -> str:
-            return "".join(word.capitalize() for word in s.split("_"))
-
-        def normalize_table_name(name: str) -> str:
-            return name.removesuffix("_woscore")
-
-        def normalize_schema(schema: str) -> str:
-            schema = self.utils.drop_schema_version(schema)
-            return "" if schema in ("gold_wos", "gold_pprn") else schema
-
-        # ---------- Extract rows ----------
-
-        rows = []
-        for t in table_schema:
-            rows.append((
-                normalize_schema(t["schema_name"]),
-                t["table_name"]
-            ))
-
-        # ---------- Group by normalized table ----------
-
-        grouped = defaultdict(list)
-        for schema, table in rows:
-            grouped[normalize_table_name(table)].append((schema, table))
-
-        # ---------- Duplicate validation ----------
-
-        object_names = {}
-        for table_name in grouped:
-            obj_name = to_camel_case(table_name)
-            if obj_name in object_names:
-                raise ValueError(
-                    f"Duplicate case object name detected: '{obj_name}' "
-                    f"for tables '{table_name}' and '{object_names[obj_name]}'"
+        # get first macthed ID from two lists
+        def first_matched_id( a, b):
+            """
+            Return the first ID from list `a` that is also in list `b`.
+            Returns None if no match is found.
+            """
+            b_set = set(b)  # fast lookups
+            for x in a:
+                if x in b_set:
+                    return x
+            return None
+        
+        upstreams, downstreams = self.api.fetch_table_lineage(
+                    table_name=table_name,
+                    environment=environment
                 )
-            object_names[obj_name] = table_name
 
-        # ---------- Generate case objects ----------
+        task_list = []
 
-        case_objects = []
+        job_ids = [job["job_id"] for job in job_list]
+      
+        for t in upstreams:
+            print(f"Processing upstream table: {t}")
 
-        for table_name, entries in grouped.items():
-            has_woscore = any(t.endswith("_woscore") for _, t in entries)
-            # final_schema = "dataset" if has_woscore else entries[0][0]
-            final_schema = entries[0][0]
-            obj_name = to_camel_case(table_name)
+            job_id = first_matched_id( t['job_ids'], job_ids ) 
+            print(f"  Matched job_id: {job_id}")
+            if job_id:
 
-            #needsSuffix = "override val needsSuffix = true" if has_woscore else ""
-            #final_schema = "override val schema = \"" + drop_schema_version( entries[0][0]) + "\"" if  entries[0][0] else ""
-            
-            if "incremental" in table_name or any(ch.isdigit() for ch in table_name): continue
+                tasks = self.api.fetch_tasks(
+                            job_id=job_id, 
+                            environment=environment
+                        )
+                # print(f"  Found matching job_id: {job_id} with tasks: {tasks}")
 
-            case_objects.append((
-                obj_name,
-                "\tcase object " + obj_name + " extends " + trait_name + " {\n" +
-                "\t\tval tableName = \"" + table_name + "\"\n" +
-                (f"\t\toverride val schema = \"{self.utils.drop_schema_version(final_schema)}\"\n" if final_schema else "") +
-                (f"\t\toverride val needsSuffix = true\n" if has_woscore else "") +
-                "\t}"
-            ))
+                job_info = next((j for j in job_list if j["job_id"] == job_id), None)
 
-    # \t\tdef schema: String = "{drop_schema_version(final_schema)}"
-    # \t\tval catalog = "{catalog_name}"
+                emails = job_info.get("email_on_failure") or []
+                emails = emails if isinstance(emails, list) else [emails]
 
-        # ---------- Sort alphabetically ----------
+                owner = self.utils.name_from_email(emails[0]) if emails else ""
+                email = ",".join(emails)
 
-        case_objects.sort(key=lambda x: x[0])
+                # print(f"  Job info: {job_info}")
+                if job_info:
+                    task_list.append({
+                        "pipeline": job_info['name'], #job_info['tag_Component'],
+                        "owner": owner, # job_info['tag_Owner'],
+                        "product": job_info['tag_Product'],
+                        "email": email, # job_info['email_on_failure'],
+                        # "job_id": str(job_info['job_id']),
+                        "tasks": tasks,
+                        # "name": t['name'],
+                        "downstream_table": table_name,
+                        "upstream_table": t['name'],
+                        "upstream_catalog_name": t['catalog_name'],
+                        "upstream_schema_name": t['schema_name'],
+                        "upstream_table_type": t['table_type'],
+                    })
 
-        # ---------- Generate sealed trait ----------
-
-
-        objects_def = "\n\n".join(obj for _, obj in case_objects)
-
-        scala_code = f"""// AUTO-GENERATED FILE — DO NOT EDIT
-    // Generated by Python
-
-    object {trait_name} {{
-
-    {objects_def}
-
-    }}
-    """
-
-        # ---------- Write to file ----------
-
-        output_file = Path(output_path)
-
-        output_file.write_text(scala_code, encoding="utf-8")
-
-        print(f"Scala file generated: {output_file.resolve()}")
-
+        task_list.sort(key=lambda x: (x['pipeline'], x['downstream_table']))
+        return task_list
 
     # -------------------------------------------------------------------
     # Feature Function 
     # -------------------------------------------------------------------
+    
+    # fetch DAP jobs list and write to csv and excel
+    def fetch_dap_jobs_list(self, ctx: FeatureContext):
+        """
+        Fetch and return the list of DAP-related jobs in the specified environment.
+        """
+        joblist = self.api.fetch_jobs_list(
+                release_version= self.release_version, 
+                environment=ctx.environment
+            )
+        print(f"Total jobs fetched: {len(joblist)}")
+        job_list = []
+        filename = f"{ctx.output_path}/{self.dap_job_list_file}"    
+        self.utils.delete_file(filename)
+        for row in joblist:
+            #d = json.dumps(row)
+            # self.utils.append_csv_line(d,  filename)
+            job_list.append(row)
+
+        #df = pd.read_csv(csv_filename)
+        #df.to_excel(f"{csv_filename.replace('.csv', '')}.xlsx", index=False)
+        self.save_feature_result(job_list, filename)
+
+        return job_list
+    
+
+    # get table schema info for specified catalog and schemas and write to json
     def fetch_table_schema_info(
             self,
             ctx: FeatureContext
@@ -1472,7 +1386,9 @@ class DapFeatures:
                     version = ctx.version.removesuffix("_")
                 )
     
-        self.utils.dump_json_to_file(all_tables, f"{ctx.output_path}/{ctx.filename}")
+        filename = f"{ctx.output_path}/{ctx.filename}"
+        # self.utils.dump_json_to_file(all_tables, f"{ctx.output_path}/{ctx.filename}")
+        self.save_feature_result(all_tables, filename)
 
         return all_tables
 
@@ -1484,10 +1400,143 @@ class DapFeatures:
         
         print(
                 f"generateSchemaTrait: catalog={ctx.catalog_name}, "
-                f"schemas={ctx.schemas}, trait={ctx.trait_name}, "
+                f"schemas={ctx.schemas}, trait={ctx.trait_name}, pk_relation_file={ctx.pk_relation_file}, "
                 f"version={ctx.version}, output={ctx.output_path}, environment={ctx.environment}"
             )
+
+        def get_pk_str(
+            metadata: List[Dict],
+            schema: str,
+            table_name: str
+        ) -> str:
+           
+            for item in metadata:
+                if item.get("schema") == schema and item.get("table_name") == table_name:
+                    pk = item.get("pk", "").strip()
+                    fk = item.get("fk", "").strip()
+
+                    if pk and fk:
+                        return f"{pk},{fk}"
+                    elif pk:
+                        return pk
+                    else:
+                        return ""
+
+            return ""
+
+        pk_relation_file =F"{ctx.output_path}/{ctx.pk_relation_file}.json"
+        pk_relations = self.utils.load_json_file(pk_relation_file) if ctx.trait_name == "ACS" else {}
+
+        # generate scala case objects (scala file) from table schema (Active version)
+        def generate_case_objects(
+            table_schema: list,
+            output_path: str,
+            trait_name: str,
+            pk_relations: dict = {}
+        ) -> None:
+            """
+            Generate Scala sealed trait and case objects from Unity Catalog table metadata.
+
+            Features:
+            - Alphabetical sorting
+            - Sealed trait generation
+            - Duplicate validation
+            - Writes output to .scala file
+            """
+
+            # ---------- Helpers ----------
+
+            def to_camel_case(s: str) -> str:
+                return "".join(word.capitalize() for word in s.split("_"))
+
+            def normalize_table_name(name: str) -> str:
+                return name.removesuffix("_woscore")
+
+            def normalize_schema(schema: str) -> str:
+                schema = self.utils.drop_schema_version(schema)
+                return "" if schema in ("gold_wos", "gold_pprn") else schema
+
+            # ---------- Extract rows ----------
+            rows = []
+            for t in table_schema:
+                rows.append((
+                    normalize_schema(t["schema_name"]),
+                    t["table_name"],
+                    self.utils.drop_schema_version(t["schema_name"])
+                ))
+
+            # ---------- Group by normalized table ----------
+            grouped = defaultdict(list)
+            for schema, table, original_schema in rows:
+                grouped[normalize_table_name(table)].append((schema, table, original_schema))
+
+            # ---------- Duplicate validation ----------
+
+            object_names = {}
+            for table_name in grouped:
+                obj_name = to_camel_case(table_name)
+                if obj_name in object_names:
+                    raise ValueError(
+                        f"Duplicate case object name detected: '{obj_name}' "
+                        f"for tables '{table_name}' and '{object_names[obj_name]}'"
+                    )
+                object_names[obj_name] = table_name
+
+            # ---------- Generate case objects ----------
+
+            case_objects = []
+
+            for table_name, entries in grouped.items():
+
+                schema, table, original_schema = entries[0]
         
+                has_woscore = any(t.endswith("_woscore") for _, t, _ in entries)
+                # final_schema = "dataset" if has_woscore else entries[0][0]
+                obj_name = to_camel_case(table_name)
+
+                pk_str = get_pk_str(pk_relations, original_schema, table_name)
+                # Skip itemp table names            
+                if "incremental" in table_name or any(ch.isdigit() for ch in table_name): continue
+
+                case_objects.append((
+                    obj_name,
+                    "\tcase object " + obj_name + " extends " + trait_name + " {\n" +
+                    "\t\tval tableName = \"" + table_name + "\"\n" +
+                    (f"\t\toverride val schema = \"{schema}\"\n" if schema else "") +
+                    (f"\t\toverride val needsSuffix = true\n" if has_woscore else "") +
+                    (f"\t\toverride val primaryKeyCols = \"{pk_str}\"\n" if pk_str else "") +
+                    "\t}"
+                ))
+
+        # \t\tdef schema: String = "{drop_schema_version(final_schema)}"
+        # \t\tval catalog = "{catalog_name}"
+
+            # ---------- Sort alphabetically ----------
+            case_objects.sort(key=lambda x: x[0])
+
+            # ---------- Generate sealed trait ----------
+            objects_def = "\n\n".join(obj for _, obj in case_objects)
+
+            scala_code = dedent(f"""// AUTO-GENERATED FILE — DO NOT EDIT
+// Generated by Python
+object {trait_name} {{
+
+{objects_def}
+
+}}
+""").strip()
+
+            # ---------- Write to file ----------
+
+            output_file = Path(output_path)
+
+            output_file.write_text(scala_code, encoding="utf-8")
+
+            print(f"Scala file generated: {output_file.resolve()}")
+
+
+        # ---------- Main Logic ----------
+        # fetch table schema info for specified catalog and schemas
         all_tables = []
 
         catalog = f"{ctx.catalog_name}_{ctx.environment}" if ctx.environment else ctx.catalog_name
@@ -1505,11 +1554,11 @@ class DapFeatures:
             all_tables.extend(tables)
 
         # One object, deduped across schemas
-        self.generate_case_objects(
-            catalog_name=ctx.catalog_name,
+        generate_case_objects(
             table_schema=all_tables,
             output_path=f"{ctx.output_path}/{ctx.trait_name}.scala",
-            trait_name=ctx.trait_name
+            trait_name=ctx.trait_name,
+            pk_relations=pk_relations
         )
 
     # generate table lineage info (upstream )for specified schemas and write to csv
@@ -1523,7 +1572,47 @@ class DapFeatures:
                 f"version={ctx.version}, output={ctx.filename}"
             )
         
+        # get table lineage info (upstream )for specified table and write to csv
+        def fetch_table_upstream_lineage(
+                schema: str, 
+                table_name: str, 
+                environment: str
+            ) -> List[str]:
+            """
+            Fetches table lineage info from Databricks API and returns upstreams and downstreams.
+            Returns:
+                tuple: (upstreams, downstreams), each is a list of dicts with requested fields
+            """
+
+            upstreams, downstreams = self.api.fetch_table_lineage(
+                        table_name=table_name, 
+                        environment=environment
+                    )
+
+            # parse upstreams
+            def extract_tables(schema: str, tables_list) -> List[str]:
+
+                lineages=[]
+                for t in tables_list:
+                    # Extract job_id correctly
+                    catalog_name = t.get("catalog_name")
+                    schema_name = t.get("schema_name")
+                    name = t.get("name")
+                    full_table_name = f"{catalog_name}.{schema_name}.{name}"
+                    csv_line = f"{schema},{table_name},{full_table_name}"
+                    lineages.append(csv_line)
+                    # self.utils.append_csv_line(csv_line, filename )
+                return lineages
+            
+            return extract_tables(schema, upstreams)
+
+
         catalog = f"{ctx.catalog_name}_{ctx.environment}" if ctx.environment else ctx.catalog_name
+        
+        filename = f"{ctx.output_path}/{ctx.filename}"
+        # self.utils.delete_file(f"{filename}.csv")  
+
+        dap_lineages = []
         for schema in ctx.schemas:
             schemaName = f"{schema}_{ctx.version}"
 
@@ -1533,16 +1622,24 @@ class DapFeatures:
                         environment=ctx.environment
                     )
             full_names = [t["full_name"] for t in tablesList]
+
             for tableName in full_names:
                 print(f"Processing table: {schemaName}.{tableName}")
-                self.api.fetch_table_upstream_lineage_csv(
+                dap_lineages.extend(
+                    fetch_table_upstream_lineage(
                         schema=schemaName, 
                         table_name=tableName,
-                        environment=ctx.environment,
-                        filename=f"{ctx.output_path}/{ctx.filename}"
+                        environment=ctx.environment
                     )
+                )
+        
+        # self.utils.save_to_file(dap_lineages, filename)
+        # df = pd.read_csv(filename)
+        # df.to_excel(f"{filename.replace('.csv', '')}.xlsx", index=False)
+        self.save_feature_result(dap_lineages, filename)
 
-  # compare table schemas between two versions and export the diff report to json and csv
+
+    # compare table schemas between two versions and export the diff report to json and csv
     def diff_tables_schema(
             self,
             ctx: FeatureContext
@@ -1575,8 +1672,13 @@ class DapFeatures:
                 right_tables = right_infos
             ) 
 
-        self.utils.dump_json_to_file(report, f"{ctx.output_path}/{ctx.filename}.json")
-        self.export_schema_diff_to_csv(report, f"{ctx.output_path}/{ctx.filename}.csv")
+        filename = f"{ctx.output_path}/{ctx.filename}"
+        #self.utils.dump_json_to_file(report, f"{filename}.json")
+        #self.export_schema_diff_to_csv(report, f"{filename}.csv")
+        #df = pd.read_csv(f"{filename}.csv")
+        #df.to_excel(f"{filename}.xlsx", index=False)
+        print(f"Schema diff report generated with {len(report)} discrepancies. Save to {filename}")
+        self.save_feature_result(report, filename)
 
         return report
 
@@ -1592,7 +1694,39 @@ class DapFeatures:
             f" output={ctx.output_path}, environment={ctx.environment}, src_environment={ctx.src_environment}"
         )
 
+          # build structured data for pipelines
+        def save_meta_insert_sql(
+            data: List[Dict],
+            ctx: FeatureContext
+        ) -> Any:
+            """
+            Save feature data to files (csv, json, excel).
+            """
+
+            filename = f"{ctx.output_path}/{ctx.filename}".rstrip(".json").rstrip(".csv").rstrip(".xlsx")
+
+            #self.utils.delete_file(f"{filename}.csv")   
+
+            #self.utils.dump_json_to_file(data, f"{filename}.json")   
+            #df = pd.read_csv(f"{filename}.csv")
+            #df.to_excel(f"{filename}.xlsx", index=False)
+
+            # read flat rows from csv
+            metadata = self.utils.read_json_lines(f"{filename}.csv") 
+
+            # generate sql insert statements for pipeline registry and task upstream tables
+            registry_filename = f"{ctx.output_path}/{self.insert_registry_sql_file}"
+            task_filename = f"{ctx.output_path}/{self.insert_task_sql_file}"
+
+            stmt = self.build_pipelines_insert_sql(metadata, f"{ctx.schema}.{self.reistry_table_name}")
+            self.utils.save_to_file(stmt, registry_filename)
+            # generate sql insert statements for pipeline task upstream tables
+            stmt = self.build_pipelines_task_insert_sql(metadata, f"{ctx.schema}.{self.upstream_table_name}") 
+            self.utils.save_to_file(stmt, task_filename)
+
         all_tables = []
+        filename = f"{ctx.output_path}/{ctx.filename}"
+        self.utils.delete_file( f"{filename}.csv")
 
         jobList = self.api.fetch_jobs_list(
                     release_version= self.release_version, 
@@ -1611,38 +1745,179 @@ class DapFeatures:
                 continue
 
             for table in tables:
-                task_list = self.api.fetch_pipeline_lineages(
+                task_list = self.fetch_pipeline_lineages(
                                 table_name=table["full_name"], 
                                 environment=ctx.environment,
                                 job_list=jobList
                             )
                 for row in task_list:
-                    d = json.dumps(row)
                     all_tables.append(row)
-                    self.utils.append_csv_line(d, f"{ctx.output_path}/{self.self.acs_schema_info_file}.csv")
-    
-        # build structured data for pipelines
-        data = self.build_pipeline_structured_data(all_tables)
-        self.utils.dump_json_to_file(data, f"{ctx.output_path}/{self.self.acs_schema_info_file}.json")   
-        # read flat rows from csv
-        metadata = self.utils.read_json_lines(f"{ctx.output_path}/{self.self.acs_schema_info_file}.csv") 
-        # generate sql insert statements for pipeline registry and task upstream tables
-        stmt = self.build_pipelines_insert_sql(metadata, f"{ctx.schema}.{self.reistry_table_name}")
-        self.utils.save_to_file(stmt, f"{ctx.output_path}/{self.insert_registry_sql_file}")
-        # generate sql insert statements for pipeline task upstream tables
-        stmt = self.build_pipelines_task_insert_sql(metadata, f"{ctx.schema}.{self.upstream_table_name}") 
-        self.utils.save_to_file(stmt, f"{ctx.output_path}/{self.insert_task_sql_file}")
+                    d = json.dumps(row)
+                    self.utils.append_csv_line(d, f"{filename}.csv" )
 
+
+        print(f"Total pipeline lineage records: {len(all_tables)}")
+        data = self.build_pipeline_structured_data(all_tables)
+        print(f"Total pipelines: {len(data)}")
+        self.utils.dump_json_to_file(data, f"{filename}.json")
+
+        save_meta_insert_sql(data, ctx)
+
+    # generate ACS table relationships metadata from table definitions
+    def generate_tables_pk(
+            self,
+            ctx: FeatureContext,
+        ) :
+        """
+        Create ACS & DAP table primary key metadata from table definitions.
+        Returns:
+            list of dict: Each dict represents a table with primary and foreign keys
+        """
+
+        # build CREATE TABLE SQL from table definition
+        def build_table_pk(
+                table_def: dict
+            ) -> dict:
+
+            # sort columns based on predefined rules
+            def select_pk_columns(
+                    schema_name: str,
+                    table_name: str,
+                    columns: list[dict]
+                ) -> list[dict]:
+                    
+                def sort_key(col):
+                    name = col["name"].lower()
+                    if name == "uid":
+                        return (1, name)
+                    if name == "isi_loc":
+                        return (2, name)
+                    if name == "article_key" or name == "accession_number":
+                        return (3, name)
+                    if name == "pguid" or name == "sp_id" :
+                        return (20, name)
+                    if name == "org_pguid":
+                        return (30, name)
+                    if re.fullmatch(r".+_pguid", name):
+                        return (40, name)
+                    if re.fullmatch(r".+_key", name):
+                        return (50, name)
+                    if re.fullmatch(r".+_uid", name):
+                        return (60, name) 
+                    if name == "dataset_id" or name == "variable_id":
+                        return (90, name)
+                    if re.fullmatch(r"fk_.+_id", name):
+                        return (70, name) 
+                    if re.fullmatch(r".+_id", name):
+                        return (60, name) 
+                    if re.fullmatch(r".+_code", name):
+                        return (88, name)
+                    return (90, name)  # remaining columns
+                
+                def sort_if_both_end_with_key(values: list[str]) -> list[str]:
+                    if len(values) == 2 and all(v.endswith("_key") for v in values):
+                        # Ensure category_key is always second
+                        if "category_key" in values:
+                            first = values[0] if values[1] == "category_key" else values[1]
+                            return [first, "category_key"]
+                        return sorted(values, reverse=True)
+                    return values
+                
+                def is_valid_column(col_name: str) -> bool:
+                   
+                    valid_cols = ["uid", "isi_loc", "pguid", "sp_id", "org_pguid", "key", "*_key", "*_id"]
+                    invalid_cols = ["_id", "id", "docs_key", "doc_id", "__END_AT", "__START_AT", "orcid_id", "diasng_id", "is*"]
+
+                    # Check for invalid columns
+                    for invalid in invalid_cols:
+                        if re.fullmatch(invalid.replace("*", ".*"), col_name):
+                            return False  # Return False if any invalid pattern matches
+
+                    # Check for valid columns
+                    for valid in valid_cols:
+                        if re.fullmatch(valid.replace("*", ".*"), col_name):
+                            return True  # Return True if any valid pattern matches
+                    
+                    # If no match, return False (this means the column is neither valid nor invalid)
+                    return False
+                
+
+                def to_pk_fk(schema_name, table_name, rows):
+
+                    if len(rows) < 2:
+                        return{
+                                "schema": schema_name, 
+                                "table_name": table_name, 
+                                "pk": rows[0], 
+                                "fk": ""
+                            }
+                    else:
+                        rows = sort_if_both_end_with_key(rows)
+                        row = rows[1] if len(rows) > 1 and is_valid_column(rows[1]) else ""
+                        return {
+                                "schema": schema_name, 
+                                "table_name": table_name, 
+                                "pk": rows[0], 
+                                "fk": row 
+                        } 
+
+                pk_columns = sorted(columns, key=sort_key)
+                relations = [row["name"] for row in pk_columns[:2] ]
+
+                return to_pk_fk(schema_name, table_name, relations)
+
+            # schema = self.drop_schema_version(table_def["schema_name"])
+            schema_name = self.utils.drop_schema_version(table_def["schema_name"])
+            table_name = table_def["table_name"]
+            pk_columns = select_pk_columns(schema_name, table_name, table_def["columns"])           
+            #csv_string = ",".join(pk_columns)     
+            #                 
+            return pk_columns
+
+        relationships = []
+
+        table_defs = self.api.fetch_table_schemas(
+                    catalog_name = ctx.catalog_name, 
+                    schemas = ctx.schemas,
+                    environment = ctx.environment,
+                    version = ctx.version.removesuffix("_")
+                )
+        
+        filename = f"{ctx.output_path}/{ctx.filename}"
+
+        # self.utils.delete_file(filename + ".csv")
+        # csv_header = "schema,table_name,primary_key,foreign_key"
+        # self.utils.append_csv_line(csv_header, filename + ".csv" )
+
+        for table_def in table_defs:
+            relation = build_table_pk(table_def)
+            relationships.append(relation)
+            # csv_line = ",".join(relation.values())
+            # self.utils.append_csv_line(csv_line,  f"{filename}.csv" )
+    
+        #self.utils.dump_json_to_file(relationships, f"{filename}.json")
+        #df = pd.read_csv(f"{filename}.csv")
+        #df.to_excel(f"{filename}.xlsx", index=False)
+
+        self.save_feature_result(relationships, filename)
+
+        return relationships
+    
     # run feature based on feature name with  context handling
     def run_feature(
             self,
             feature: str, **kwargs):
+    
+        ctx = self.CONTEXT_FACTORIES[feature](kwargs)
+        self.FEATURE_HANDLERS[feature](ctx)
+
+        """ 
         try:
             ctx = self.CONTEXT_FACTORIES[feature](kwargs)
             self.FEATURE_HANDLERS[feature](ctx)
         except KeyError:
             raise ValueError(f"Unsupported feature: {feature}")
-
+        """
     def ensure_path_exists(
             self,
             **kwargs
@@ -1675,18 +1950,19 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 2:
         print("Please provide a feature name as the first argument ...\n\n")
-        print("Usage:  python meta_ops.py <feature_name> [param=value ...]\n")
+        print("Usage:  python meta-maint.py <feature_name> [param=value ...]\n")
         print(
-            f"Feature: list_jobs | acs_trait | udm_trait | dap_trait | dap_lineage |\n"
+            f"Feature: list_jobs | acs_trait | udm_trait | dap_trait | dap_lineage | acs_relations |\n"
             f"         pipeline_metadata | acs_schema | dap_schema |diff_schema | all\n"
         )
+        print("the feature 'acs_relations' need be run before the feature 'acs_trait'\n")
 
         sys.exit(1)
 
     feature_name = sys.argv[1]
 
     feature_list = (
-            [ "list_jobs", "acs_trait", "udm_trait", "dap_trait", "dap_lineage", "acs_schema", "diff_schema",  "pipeline_metadata" ]
+            [ "list_jobs", "acs_trait", "udm_trait", "dap_trait", "dap_lineage", "acs_schema", "acs_relations", "diff_schema",  "pipeline_metadata" ]
             if feature_name == "all"
             else [feature_name]
         )
@@ -1706,9 +1982,14 @@ if __name__ == "__main__":
     # Run only the requested feature once
     # Set up connection and API info for PROD environment
 
-    ft = DapFeatures()
-    ft.ensure_path_exists(**kwargs)
+    try:
+        meta_mgr = DapMetaManager()
+        meta_mgr.ensure_path_exists(**kwargs)
 
-    for feature in feature_list:
-        print(f"Executing feature {feature} with parameters: {kwargs}")
-        ft.run_feature(feature, **kwargs)
+        for feature in feature_list:
+            print(f"Executing feature {feature} with parameters: {kwargs}")
+            meta_mgr.run_feature(feature, **kwargs)
+
+    except Exception as e:
+        print(f"Error running feature '{feature_name}': {e}")
+

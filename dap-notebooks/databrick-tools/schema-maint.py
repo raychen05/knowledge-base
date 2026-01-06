@@ -15,34 +15,25 @@ from typing import List, Dict, Any, Sequence, Optional, Tuple
 #from databricks import sql
 from databricks import sql as dbsql
 from enum import Enum
-from dataclasses import dataclass
-
+from dataclasses import dataclass, field
+import textwrap
 
 class WatermarkType(Enum):
     BASELINE = "baseline"
     INCREMENTAL = "incremental"
     DUMPY = "dumpy"
 
-
+# -------------------------------------------------------------------
 @dataclass
 class FeatureContext:
-    catalog_name: Optional[str] = None 
-    schemas: Optional[list] = None 
-    version: Optional[str] = None  
-    environment: Optional[str] = None  
-    filename: Optional[str] = None 
-    ops_table_name: Optional[str] = None             # table - watermark, registry or task   -- pipeline_metadata, insert_watermark
-    source_version: Optional[str] = None             # source version for clone schema.      -- clone_dap_schemas
-    target_version: Optional[str] = None             # target version for clone schema.      -- clone_dap_schemas
-    sql_file_path: Optional[str] = None
-    table_name: Optional[str] = None
-    file_path: Optional[str] = None
-    output_path: Optional[str] = None
-    watermark_type: Optional[WatermarkType] = None  # watermark type for insert watermark data
-    stmt: Optional [str] = None         # single sql statement to execute
-    schema: Optional[str] = None          # single schema name
-   # zorder_columns: Optional[dict] = None           # zorder columns for optimize table
+    params: Dict[str, Any] = field(default_factory=dict)
 
+    def __init__(self, **kwargs):
+        object.__setattr__(self, "params", kwargs)
+
+    def __getattr__(self, item):
+        return self.params.get(item)
+    
 class ConfigInfo:
 
     def __init__(self):
@@ -92,21 +83,21 @@ class ConfigInfo:
         self.create_ops_tables_sql_file = cfg.get("create_ops_tables_sql_file", "ddl/create_ops_tables.sql")
         self.optimize_dap_tables_sql_file = cfg.get("optimize_dap_tables_sql_file", "ddl/optimize_dap_tables.sql")
         
-        self.clone_schemas = cfg.get("clone_schemas", [
-                "dap_reference",
-                "dap_sort_ref"
-            ])
+        self.clone_source_schemas = cfg.get("clone_source_schemas", "ag_ra_search_analytics_data_dev.dap_reference_v_1_0_1")
+        self.clone_target_schemas = cfg.get("clone_target_schemas", "ag_ra_search_analytics_data_uat.dap_reference_v_1_0_1")
+
+         # DAP registry and task upstream table names
         
-        self.reistry_table_name = cfg.get("registry_table_name", "dap_pipeline_registry")
+        self.registry_table_name = cfg.get("registry_table_name", "dap_pipeline_registry")
         self.upstream_table_name = cfg.get("upstream_table_name", "dap_pipeline_task_upstream")
 
         self.insert_registry_sql_file = cfg.get('insert_registry_sql_file', 'dap_pipeline_registry.sql')
         self.insert_task_sql_file = cfg.get('insert_task_sql_file', 'dap_pipeline_task_upstream.sql')
         self.create_table_schema_sql_file = cfg.get('create_table_schema_sql_file', 'create_dap_table_schema.sql')
 
-        self.acs_tables_version_info_file =cfg.get('acs_tables_version_info_file', 'acs_version_info.json')
-        self.dap_schema_info_file = cfg.get('dap_schema_info_file', 'dap_schema_info.json')
-        self.dap_pipeline_metadata_file = cfg.get('dap_pipeline_metadata_file', 'pipeline_metadata.json')
+        self.acs_tables_version_info_file =cfg.get('acs_tables_version_info_file', 'acs_version_info')
+        self.dap_schema_info_file = cfg.get('dap_schema_info_file', 'dap_schema_info')
+        self.dap_pipeline_metadata_file = cfg.get('dap_pipeline_metadata_file', 'pipeline_metadata')
 
         self.acs_schemas = cfg.get("acs_schemas", [
             "gold_entity",
@@ -167,11 +158,10 @@ class DapDbManager:
  
         env = kwargs.get("runtime_env",  self.runtime_env)
 
-
         self.conn = DatabricksSQLClient(
-                server_hostname = self.dev_server_hostname if env == "dev" else self.prod_server_hostname,
-                http_path =  self.dev_http_path if env == "dev" else self.prod_http_path,
-                access_token = self.dev_access_token if env == "dev" else self.prod_access_token
+                server_hostname = self.prod_server_hostname if env == "prod" else self.dev_server_hostname,
+                http_path =  self.prod_http_path if env == "prod" else self.dev_http_path,
+                access_token = self.prod_access_token if env == "prod" else self.dev_access_token
             )
  
         self.CONTEXT_FACTORIES = {
@@ -188,11 +178,8 @@ class DapDbManager:
                     version=kwargs.get("version", self.version)
                 ),
             "clone_schemas": lambda kwargs:FeatureContext(
-                    catalog_name=self.catalog_name,
-                    schemas=kwargs.get("schemas",self.clone_schemas),
-                    environment=kwargs.get("environment", self.environment),
-                    source_version=kwargs.get("source_version", self.version),
-                    target_version=kwargs.get("target_version", self.version)
+                    src_schema=kwargs.get("source_schema", self.clone_source_schema),
+                    tgt_schema=kwargs.get("target_schema", self.clone_target_schema)
                 ),
             "create_ops_tables": lambda kwargs:FeatureContext(
                     catalog_name=self.catalog_name,
@@ -361,43 +348,6 @@ class DapDbManager:
 
         return re.sub(r"_v_?\d+(?:_\d+)*$", "", schema)
    
-    # sort columns based on predefined rules
-    def sort_columns(
-            self,
-            columns: list[dict]
-        ) -> list[dict]:
-        def sort_key(col):
-            name = col["name"].lower()
-            col_type = col["type_name"].lower()
-
-            if col_type in ("array", "map", "struct"):
-                return (9, name)  # complex types at the end
-            if name == "_id" or name == "id":
-                return (0, name)
-            if  name == "pipeline_name" or name == "task_name"  or name == "table_name":
-                return (0, name)
-            if name == "uid":
-                return (1, name)
-            if name == "pguid" or name == "sp_id" or name == "isi_loc":
-                return (2, name)
-            if name == "collection_id" or name == "dataset_id" :
-               return (7, name)
-            if re.fullmatch(r".+_id", name):
-                return (3, name)
-            if name.endswith("id"):
-                return (4, name)
-            if name == "key":
-                return (5, name)
-            if re.fullmatch(r".+_key", name):
-                return (6, name)
-            if re.fullmatch(r".+_ts", name):
-                return (10, name)
-            if re.fullmatch(r".+_by", name):
-                return (11, name)
-            return (8, name)  # remaining columns
-
-        return sorted(columns, key=sort_key)
-
     # print SQL execution result
     def print_sql_execution_result(self, data):
 
@@ -410,160 +360,7 @@ class DapDbManager:
             print(f"Result set:\n")
             for row in data:
                 print(row)
-            
-    # create watermark row data structure
-    def create_watermark_row(
-            self,
-            table_name: str,
-            lastest_version: int,
-            latest_timestamp: str,
-            wm_type: WatermarkType
-        ) -> Dict[str, Any]:
-
-        def parse_watermark_type(wm_type: WatermarkType):
-
-            match WatermarkType(wm_type):
-                case WatermarkType.INCREMENTAL:
-                    return lastest_version - 1, "Ready"
-                case WatermarkType.DUMPY:
-                    return -1, "Success"
-                case WatermarkType.BASELINE:
-                    return lastest_version, "Ready"
-                case _:
-                    raise ValueError(f"Unsupported watermark type: {wm_type}")
-  
-        update_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        start_version, status = parse_watermark_type(wm_type)
-
-        return {
-                "batch_id": 1,
-                "table_name": table_name,
-                "start_version": start_version,
-                "end_version": lastest_version,
-                "last_processed_version": lastest_version,
-                "latest_available_version": lastest_version,
-                "start_ts": latest_timestamp,
-                "end_ts": latest_timestamp,
-                "cdf_enabled": True,
-                "status": status,
-                "error_message": "",
-                "update_ts": update_ts,
-                "updated_by": "system"
-            }
-
-   # build SQL INSERT statement for watermark metadata
-    def build_watermark_insert_sql(
-            self,
-            table_name: str,
-            data: Dict[str, Any]
-        ):
-        # List of columns in the database
-        columns = [
-            "batch_id", "table_name", "start_version", "end_version", 
-            "last_processed_version", "latest_available_version", 
-            "start_ts", "end_ts", "cdf_enabled", "status", 
-            "error_message", "update_ts", "updated_by"
-        ]
-        
-        # Ensure that all the keys are in the dictionary
-        if not all(key in data for key in columns):
-            raise ValueError("Missing one or more required keys in the input data.")
-
-        # Prepare the SQL INSERT statement
-        sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ("
-
-        # Add the values from the dictionary, ensuring proper formatting for each field type
-        values = []
-        for column in columns:
-            value = data[column]
-            if isinstance(value, str):  # String values should be wrapped in quotes
-                value = f"'{value}'"
-            elif isinstance(value, bool):  # Boolean values should be converted to 1/0
-                value = '1' if value else '0'
-            elif isinstance(value, (int, float)):  # Numbers don't need quotes
-                value = str(value)
-            elif isinstance(value, (type(None))):  # Null values for missing/empty fields
-                value = 'NULL'
-            values.append(value)
-        
-        # Finalize the SQL statement
-        sql += f"{', '.join(values)});"
-
-        return sql
-
-       # Read a SQL file, replace placeholders, split statements, and execute them one by one.
-    
-    # build INSERT SQL for dap_checkpoints table
-    def build_checkpoint_insert_sql(
-            self,
-            table_name: str,
-            pipeline_name: str, 
-            batch_id: int, 
-            status: str, 
-            updated_by: str
-        ):
-        # Get the current timestamp for 'update_ts'
-        update_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Define default values for fields that are not passed
-        default_values = {
-            "start_ts": "NULL",  # Use NULL for start_ts
-            "end_ts": "NULL",    # Use NULL for end_ts
-            "processed_ts": 0,   # Use 0 for processed_ts
-            "rows_read": 0,      # Use 0 for rows_read
-            "rows_written": 0,   # Use 0 for rows_written
-            "retry": 0,          # Use 0 for retry
-            "error_message": "NULL",  # Use NULL for error_message
-        }
-        
-        # Build the column names and the corresponding values
-        columns = [
-            "pipeline_name", "batch_id", "start_ts", "end_ts", "processed_ts",
-            "status", "rows_read", "rows_written", "retry", "error_message", 
-            "update_ts", "updated_by"
-        ]
-        
-        values = [
-            f"'{pipeline_name}'", batch_id, default_values["start_ts"], default_values["end_ts"], default_values["processed_ts"],
-            f"'{status}'", default_values["rows_read"], default_values["rows_written"], default_values["retry"], default_values["error_message"], 
-            f"'{update_ts}'", f"'{updated_by}'"
-        ]
-
-        # Create the SQL statement
-        sql_statement = f"""
-INSERT INTO {table_name} (
-    {', '.join(columns)}
-) VALUES (
-    {', '.join(map(str, values))}
-);
-"""
-
-        return sql_statement
-    
-    # generate CREATE TABLE SQL from table definition
-    def generate_create_dap_table_sql(
-            self,
-            table_def: dict
-        ) -> str:
-
-        schema = self.drop_schema_version(table_def["schema_name"])
-        table = table_def["table_name"]
-
-        columns_sql = []
- 
-        for col in self.sort_columns(table_def["columns"]):
-            col_def = f'{col["name"]} {col["type_text"].upper()}'
-            if not col["nullable"]:
-                col_def += " NOT NULL"
-            columns_sql.append(col_def)
-
-        columns_block = ",\n    ".join(columns_sql)
-
-        return f"""CREATE TABLE  IF NOT EXISTS {schema}_{{version}}.{table} (
-    {columns_block}
-    );"""
-
+     
     # execute SQL file with schema replacement
     def execute_sql_file(
         self,
@@ -574,6 +371,8 @@ INSERT INTO {table_name} (
         Read a SQL file, replace placeholders, split statements,
         and execute them one by one.
         """
+        print("sql_file_path =", sql_file_path)
+        print("type =", type(sql_file_path))
 
         sql_text = Path(sql_file_path).read_text()
 
@@ -595,8 +394,7 @@ INSERT INTO {table_name} (
             data.append(d)
 
         return data
-   
-   
+      
     # -------------------------------------------------------------------
     # Feature Functions
     # -------------------------------------------------------------------
@@ -628,19 +426,14 @@ INSERT INTO {table_name} (
             self,
             ctx: FeatureContext
         ):
-        
-        for schema in ctx.schemas:
-            print(f"Cloning schema: {ctx.catalog_name}_{ctx.environment}.{schema} from version {ctx.source_version} to {ctx.target_version}")
-            source_schema = f"{ctx.catalog_name}_{ctx.environment}.{schema}_{ctx.source_version}"
-            target_schema = f"{ctx.catalog_name}_{ctx.environment}.{schema}_{ctx.target_version}"
 
-            stmt = f"SHOW TABLES IN {source_schema}"
-            tableList = self.conn.execute_sql(stmt) 
-            tables = [row.tableName for row in tableList]
-            for tbl in tables:
-                stmt = f"CREATE TABLE {target_schema}.{tbl} DEEP CLONE {source_schema}.{tbl}"
-                print(stmt)
-                self.conn.execute_sql(stmt)
+        stmt = f"SHOW TABLES IN {ctx.src_schema}"
+        tableList = self.conn.execute_sql(stmt) 
+        tables = [row.tableName for row in tableList]
+        for tbl in tables:
+            stmt = f"CREATE TABLE {ctx.tgt_schema}.{tbl} DEEP CLONE {ctx.src_schema}.{tbl}"
+            print(stmt)
+            self.conn.execute_sql(stmt)
     
     # Create DAP ops tables in specified schema.
     def create_dap_ops_tables(
@@ -650,23 +443,20 @@ INSERT INTO {table_name} (
           
         schema_name = f"{ctx.catalog_name}_{ctx.environment}.{self.ops_schema}_{ctx.version}"
         print(f"Creating tables in schema: {schema_name}")
-
+        print(f"Using SQL file: {ctx.sql_file_path}")
         self.execute_sql_file(
-            sql_file_path=ctx.file_path,
+            sql_file_path=ctx.sql_file_path,
             replacement=schema_name
         )
    
     # Drop all DAP tables in specified schemas.
     def drop_dap_tables(
             self,
-            catalog_name: str,
-            schemas: list,
-            environment: str,
-            version: str
+            ctx: FeatureContext
         ):
-        
-        for schema in schemas:
-            schema_name = f"{catalog_name}_{environment}.{schema}_{version}"
+
+        for schema in ctx.schemas:
+            schema_name = f"{ctx.catalog_name}_{ctx.environment}.{schema}_{ctx.version}"
             print(f"Dropping tables in schema: {schema_name}")
 
             stmt = f"SHOW TABLES IN {schema_name}"  
@@ -674,6 +464,7 @@ INSERT INTO {table_name} (
             tables = [row.tableName for row in tableList]
             for tbl in tables:
                 stmt = f"DROP TABLE IF EXISTS {schema_name}.{tbl} "
+                print(stmt)
                 self.conn.execute_sql(stmt)
     
     # Enable CDC on all DAP tables.
@@ -764,7 +555,8 @@ INSERT INTO {table_name} (
 
                 all_tables.append(row)
 
-        self.dump_json_to_file(all_tables, f"{ctx.output_path}/{ctx.file_path}")
+        filename = f"{ctx.output_path}/{ctx.file_path}.json"
+        self.dump_json_to_file(all_tables, filename)
 
         return all_tables
 
@@ -787,9 +579,90 @@ INSERT INTO {table_name} (
             self,
             ctx: FeatureContext
         ): 
+             
+        # create watermark row data structure
+        def create_watermark_row(
+                table_name: str,
+                lastest_version: int,
+                latest_timestamp: str,
+                wm_type: WatermarkType
+            ) -> Dict[str, Any]:
+
+            def parse_watermark_type(wm_type: WatermarkType):
+
+                match WatermarkType(wm_type):
+                    case WatermarkType.INCREMENTAL:
+                        return lastest_version - 1, "Ready"
+                    case WatermarkType.DUMPY:
+                        return -1, "Success"
+                    case WatermarkType.BASELINE:
+                        return lastest_version, "Ready"
+                    case _:
+                        raise ValueError(f"Unsupported watermark type: {wm_type}")
+    
+            update_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            start_version, status = parse_watermark_type(wm_type)
+
+            return {
+                    "batch_id": 1,
+                    "table_name": table_name,
+                    "start_version": start_version,
+                    "end_version": lastest_version,
+                    "last_processed_version": lastest_version,
+                    "latest_available_version": lastest_version,
+                    "start_ts": latest_timestamp,
+                    "end_ts": latest_timestamp,
+                    "cdf_enabled": True,
+                    "status": status,
+                    "error_message": "",
+                    "update_ts": update_ts,
+                    "updated_by": "system"
+                }
+
+        # build SQL INSERT statement for watermark metadata
+        def build_watermark_insert_sql(
+                table_name: str,
+                data: Dict[str, Any]
+            ):
+            # List of columns in the database
+            columns = [
+                "batch_id", "table_name", "start_version", "end_version", 
+                "last_processed_version", "latest_available_version", 
+                "start_ts", "end_ts", "cdf_enabled", "status", 
+                "error_message", "update_ts", "updated_by"
+            ]
+            
+            # Ensure that all the keys are in the dictionary
+            if not all(key in data for key in columns):
+                raise ValueError("Missing one or more required keys in the input data.")
+
+            # Prepare the SQL INSERT statement
+            sql = f"INSERT INTO {table_name} ({', '.join(columns)}) VALUES ("
+
+            # Add the values from the dictionary, ensuring proper formatting for each field type
+            values = []
+            for column in columns:
+                value = data[column]
+                if isinstance(value, str):  # String values should be wrapped in quotes
+                    value = f"'{value}'"
+                elif isinstance(value, bool):  # Boolean values should be converted to 1/0
+                    value = '1' if value else '0'
+                elif isinstance(value, (int, float)):  # Numbers don't need quotes
+                    value = str(value)
+                elif isinstance(value, (type(None))):  # Null values for missing/empty fields
+                    value = 'NULL'
+                values.append(value)
+            
+            # Finalize the SQL statement
+            sql += f"{', '.join(values)});"
+
+            return sql
+
+        # Read a SQL file, replace placeholders, split statements, and execute them one by one.
         sql_statements = []
 
-        filename = f"{ctx.output_path}/{ctx.file_path}"
+        filename = f"{ctx.output_path}/{ctx.file_path}.json"
 
         print(f"Process acs version data file: {filename} , {ctx.watermark_type}")
         if Path(filename).exists():
@@ -809,18 +682,20 @@ INSERT INTO {table_name} (
         ops_table_name = f"{{schema}}.{ctx.ops_table_name}"
    
         for table_version in version_infos:
-            data = self.create_watermark_row(
+            data = create_watermark_row(
                 table_name = table_version['table_name'],
                 lastest_version = table_version['latest_version'],
                 latest_timestamp = table_version['latest_timestamp'],
                 wm_type = ctx.watermark_type
             )
-            stmt = self.build_watermark_insert_sql(ops_table_name, data)
+            stmt = build_watermark_insert_sql(ops_table_name, data)
             # self.conn.execute_sql(sql_statement)
             sql_statements.append(stmt)
 
-        self.save_to_file(sql_statements,  f"{ctx.output_path}/{ctx.sql_file_path}")
-        print(f"Saved watermark INSERT statements to {ctx.output_path}/{ctx.sql_file_path}")
+        sql_filename = f"{ctx.output_path}/{ctx.sql_file_path}"
+        self.save_to_file(sql_statements,  sql_filename)
+        print(f"Saved watermark INSERT statements to {sql_filename}")
+
         #ops_table_name = f"{ctx.catalog_name}_{ctx.environment}.{self.ops_schema}_{ctx.version.replace('.', '_')}"
         #self.execute_sql_file(
         #    sql_file_path = self.watermark_sql_file,
@@ -833,15 +708,58 @@ INSERT INTO {table_name} (
             ctx: FeatureContext
         ): 
     
+        # build INSERT SQL for dap_checkpoints table
+        def build_checkpoint_insert_sql(
+                table_name: str,
+                pipeline_name: str, 
+                batch_id: int, 
+                status: str, 
+                updated_by: str
+            ):
+            # Get the current timestamp for 'update_ts'
+            update_ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            # Define default values for fields that are not passed
+            default_values = {
+                "start_ts": "NULL",  # Use NULL for start_ts
+                "end_ts": "NULL",    # Use NULL for end_ts
+                "processed_ts": 0,   # Use 0 for processed_ts
+                "rows_read": 0,      # Use 0 for rows_read
+                "rows_written": 0,   # Use 0 for rows_written
+                "retry": 0,          # Use 0 for retry
+                "error_message": "NULL",  # Use NULL for error_message
+            }
+            
+            # Build the column names and the corresponding values
+            columns = [
+                "pipeline_name", "batch_id", "start_ts", "end_ts", "processed_ts",
+                "status", "rows_read", "rows_written", "retry", "error_message", 
+                "update_ts", "updated_by"
+            ]
+            
+            values = [
+                f"'{pipeline_name}'", batch_id, default_values["start_ts"], default_values["end_ts"], default_values["processed_ts"],
+                f"'{status}'", default_values["rows_read"], default_values["rows_written"], default_values["retry"], default_values["error_message"], 
+                f"'{update_ts}'", f"'{updated_by}'"
+            ]
+
+            # Create the SQL statement
+            sql_statement = textwrap.dedent(f"""
+                INSERT INTO {table_name} (
+                    {', '.join(columns)}
+                ) VALUES (
+                    {', '.join(map(str, values))}
+                );
+                """).strip()
+            return sql_statement
+        
         sql_statements = []
         pipeline_names = []
 
-        filename = f"{ctx.output_path}/{ctx.file_path}"
-        print(f"Process acs pipeline data file: {filename}" )
-              
+        filename = f"{ctx.output_path}/{ctx.file_path}.json"
         if Path(filename).exists():
             print(f"Loading pipeline info from file: {filename}")
-            data = self.load_json_from_file( f"./{filename}")
+            data = self.load_json_from_file(filename)
             pipeline_names =  list(data.keys())
         else:
             print(f"Fetching pipeline info for tables in schemas: {ctx.schemas}")
@@ -849,7 +767,7 @@ INSERT INTO {table_name} (
         ops_table_name = f"{{schema}}.{ctx.ops_table_name}"
    
         for pipeline in pipeline_names:
-            stmt = self.build_checkpoint_insert_sql(
+            stmt = build_checkpoint_insert_sql(
                 table_name = ops_table_name,
                 pipeline_name=pipeline, 
                 batch_id= 1, 
@@ -859,14 +777,14 @@ INSERT INTO {table_name} (
             # self.conn.execute_sql(sql_statement)
             sql_statements.append(stmt)
 
-        self.save_to_file(sql_statements,  f"{ctx.output_path}/{ctx.sql_file_path}")
-        print(f"Saved checkpoint INSERT statements to {ctx.output_path}/{ctx.sql_file_path}")
+        sql_filename = f"{ctx.output_path}/{ctx.sql_file_path}"
+        self.save_to_file(sql_statements,  sql_filename)
+        print(f"Saved checkpoint INSERT statements to {sql_filename}")
         #ops_table_name = f"{ctx.catalog_name}_{ctx.environment}.{self.ops_schema}_{ctx.version.replace('.', '_')}"
         #self.execute_sql_file(
         #    sql_file_path = self.watermark_sql_file,
         #    replacement =  ops_table_name  # no replacement needed here
         #)
-
 
     # generate CREATE TABLE SQL file from table definitions
     def create_dap_table_schema_sql_file(
@@ -874,16 +792,76 @@ INSERT INTO {table_name} (
             ctx: FeatureContext
         ) -> None:
 
-        table_defs = self.load_json_from_file(f"{ctx.output_path}/{ctx.file_path}")
+        # generate CREATE TABLE SQL from table definition
+        def build_create_dap_table_sql(
+                table_def: dict
+            ) -> str:
+
+            # sort columns based on predefined rules
+            def sort_columns(
+                    columns: list[dict]
+                ) -> list[dict]:
+
+                def sort_key(col):
+                    name = col["name"].lower()
+                    col_type = col["type_name"].lower()
+
+                    if col_type in ("array", "map", "struct"):
+                        return (9, name)  # complex types at the end
+                    if name == "_id" or name == "id":
+                        return (0, name)
+                    if  name == "pipeline_name" or name == "task_name"  or name == "table_name":
+                        return (0, name)
+                    if name == "uid":
+                        return (1, name)
+                    if name == "pguid" or name == "sp_id" or name == "isi_loc":
+                        return (2, name)
+                    if name == "collection_id" or name == "dataset_id" :
+                        return (7, name)
+                    if re.fullmatch(r".+_id", name):
+                        return (3, name)
+                    if name.endswith("id"):
+                        return (4, name)
+                    if name == "key":
+                        return (5, name)
+                    if re.fullmatch(r".+_key", name):
+                        return (6, name)
+                    if re.fullmatch(r".+_ts", name):
+                        return (10, name)
+                    if re.fullmatch(r".+_by", name):
+                        return (11, name)
+                    return (8, name)  # remaining columns
+    
+                return sorted(columns, key=sort_key)
+      
+            schema = self.drop_schema_version(table_def["schema_name"])
+            table = table_def["table_name"]
+
+            columns_sql = []
+    
+            for col in sort_columns(table_def["columns"]):
+                col_def = f'{col["name"]} {col["type_text"].upper()}'
+                if not col["nullable"]:
+                    col_def += " NOT NULL"
+                columns_sql.append(col_def)
+
+            columns_block = ",\n    ".join(columns_sql)
+
+            return f"""CREATE TABLE  IF NOT EXISTS {schema}_{{version}}.{table} (
+        {columns_block}
+        );"""
+
+        table_defs = self.load_json_from_file(f"{ctx.output_path}/{ctx.file_path}.json")
         sql_statements = []
 
         for table_def in table_defs:
-            sql = self.generate_create_dap_table_sql(table_def)
+            sql = build_create_dap_table_sql(table_def)
             sql_statements.append(sql)
 
         # output_file = f"create_tables_schema.sql"
-        self.save_to_file(sql_statements, f"{ctx.output_path}/{ctx.sql_file_path}")
-        print(f"Saved CREATE TABLE statements to {ctx.output_path}/{ctx.sql_file_path}")
+        sql_filename = f"{ctx.output_path}/{ctx.sql_file_path}"
+        self.save_to_file(sql_statements, sql_filename)
+        print(f"Saved CREATE TABLE statements to {sql_filename}")
 
     # execute a single SQL statement
     def execute_sql_statement(
@@ -917,7 +895,6 @@ INSERT INTO {table_name} (
         print("SQL execution result:\n")
         self.print_sql_execution_result(data)
             
-
     # run feature based on feature name with  context handling
     def run_feature(
             self,
@@ -936,14 +913,15 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print( 
             f"Please provide a feature name as the first argument ...\n\n"
-            f"- Usage:  python schema_ops.py <feature_name> [param=value ...]\n"
+            f"- Usage:  python schema-maint.py <feature_name> [param=value ...]\n"
             f"- Feature:  create_schemas | purge_schemas | clone_schemas | create_ops_tables | drop_ops_tables | \n"
             f"            enable_cdc | optimize_tables | fetch_acs_versions | create_watermark_sql | run_sql | run_sql_file\n"
             f"- Parameters: environment (default: prod), version (default: v_1_0_1), source_version, target_version \n\n"
             f"- Examples: \n"
-            f"   python schema_ops.py create_schemas environment=prod version=v_1_0_1\n"
-            f"   python schema_ops.py run_sql_file sql_file_path=path/to/file.sql environment=prod\n"
-            f"   python schema_ops.py create_watermark_sql  environement=dev  version=v_1_0_1  watermark_type=baseline\n"
+            f"   python schema-maint.py create_schemas environment=prod version=v_1_0_1\n"
+            f"   python schema-maint.py run_sql_file sql_file_path=path/to/file.sql environment=prod\n"
+            f"   python schema-maint.py create_watermark_sql  environement=dev  version=v_1_0_1  watermark_type=baseline\n"
+            f"   python schema-maint.py drop_ops_tables environment=preprod version=v1_0 schemas=dap_ops\n"
            # f"Example: python schema_ops.py optimize_tables environment=prod version=v_1_0_1 zorder_columns='{\"dap_entity_wos\": [\"publication_year\", \"document_type\"]}'"
         )  
         sys.exit(1)    
@@ -964,14 +942,14 @@ if __name__ == "__main__":
 
     # env = kwargs.get("environment", "prod")
 
-    try:
-        db_mgr = DapDbManager(**kwargs) 
-        db_mgr.run_feature( feature=feature_name, **kwargs)
+  #  try:
+    db_mgr = DapDbManager(**kwargs) 
+    db_mgr.run_feature( feature=feature_name, **kwargs)
 
-    except Exception as e:
-        print(f"Error running feature '{feature_name}': {e}")
+ #   except Exception as e:
+  #      print(f"Error running feature '{feature_name}': {e}")
 
-# python schema_ops.py run_sql stmt="show tables in ag_ra_search_analytics_data_uat.dap_ops_v_1_0_1" 
-# python schema_ops.py run_sql_file sql_file_path=test.sql
-# python schema_ops.py run_sql_file sql_file_path=v_1_0_1/insert_watermarks.sql schema=dap_ops 
+# python schema-maint.py run_sql stmt="show tables in ag_ra_search_analytics_data_uat.dap_ops_v_1_0_1" 
+# python schema-maint.py run_sql_file sql_file_path=test.sql
+# python schema-maint.py run_sql_file sql_file_path=v_1_0_1/insert_watermarks.sql schema=dap_ops 
 

@@ -1,0 +1,146 @@
+
+curl -X GET \
+  -H "Authorization: Bearer ----" \
+  "https://cloud.databricks.com/api/2.1/unity-catalog/lineage?entity_name=ag_ra_search_analytics_data_dev.dap_entity_wos.ap_article&entity_type=TABLE&max_depth=3"
+
+
+###
+curl -X GET \
+  -H "Authorization: Bearer ----" \
+  "https://cloud.databricks.com/api/2.1/unity-catalog/lineage"
+
+
+### --netrc 
+
+curl -X GET "https://cloud.databricks.com/api/2.0/lineage-tracking/table-lineage" \
+-H "Authorization: Bearer ----" \
+-H 'Content-Type: application/json' \
+
+-d '{"table_name": "ag_ra_search_analytics_data_dev.dap_entity_wos.ap_article", "include_entity_lineage": true}'
+
+###
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/tables/ag_ra_search_analytics_data_dev.dap_entity_wos.ap_article" \
+-H "Authorization: Bearer ----" \
+
+### not work
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/constraints" \
+-H "Authorization: Bearer ----" 
+
+###
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/tables?catalog_name=ag_ra_search_analytics_data_dev&schema_name=dap_entity_wos" \
+-H "Authorization: Bearer ----" 
+
+
+###. PROD
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/tables?catalog_name=ag_content_ims_acs_prod&schema_name=acs_entity" \
+-H "Authorization: Bearer ----" 
+
+###
+
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/tables?catalog_name=ag_ra_search_analytics_data_prod&schema_name=dap_entity_wos_v1_0" \
+-H "Authorization: Bearer ----" 
+
+
+# ag_ra_search_analytics_data_prod.dap_entity_wos_v1_0
+###
+
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/tables?catalog_name=ag_content_ims_acs_prod&schema_name=gold_wos&table_name=d_publisher" \
+-H "Authorization: Bearer ----" 
+
+
+
+###
+
+
+curl -X GET "https://cloud.databricks.com/api/2.1/jobs/get?job_id=815005344137623" \
+-H "Authorization: Bearer ----" 
+
+###
+
+
+curl -X GET https://cloud.databricks.com/api/2.1/unity-catalog/tables \
+  -H "Authorization: Bearer ----" \
+  -d '{
+    "catalog_name": "ag_ra_search_analytics_data_prod",
+    "schema_name": "dap_entity_wos_v1_0"
+  }'
+
+# tables list: name
+# alma 
+# full_name, catalog_name, schema_name, name, columns (tabel schema
+# properties.delta.enableChangeDataFeed
+
+
+###
+curl -X GET "https://cloud.databricks.com/api/2.0/lineage-tracking/table-lineage" \
+-H "Authorization: Bearer ----" \
+-H 'Content-Type: application/json' \
+
+-d '{"table_name": "ag_ra_search_analytics_data_prod.dap_entity_wos_v1_0.ap_article", "include_entity_lineage": true}'
+
+###
+# ag_ra_search_analytics_data_prod.dap_entity_wos_v1_0
+# ag_content_ims_acs_prod.gold_entity
+
+# lineage API:  downstreams & upstreams
+
+# ap_article: "job_id": 815005344137623   jobInfos.job_id
+#  downstreams.jobInfos.job_id: 972599752688648
+
+#GET /api/2.0/pipelines/get?pipeline_id=<pipeline_id>
+
+curl -X GET "https://cloud.databricks.com/api/2.0/pipelines/get?pipeline_id=815005344137623" \
+-H "Authorization: Bearer ----" 
+
+###
+
+curl -X GET "https://cloud.databricks.com/api/2.1/jobs/get?job_id=815005344137623" \
+-H "Authorization: Bearer ----" 
+
+# jobs API
+# job_id, settings.name, email_notifications.on_failure,
+# settings:
+# tags.Component, tag.Owner, tags.Product
+# tasks list: task_key, job_cluster_key
+
+------------------------------
+###
+curl -X GET "https://cloud.databricks.com/api/2.1/jobs/list" \
+-H "Authorization: Bearer ----" 
+
+###
+
+
+curl -X GET "https://cloud.databricks.com/api/22.0/sql/statements" \
+-H "Authorization: Bearer ----" \
+-H "Content-Type: application/json" \
+-d '{
+    "statement": "INSERT INTO prod.analytics.pipeline_metadata VALUES (\"my-pipeline\", \"davod\", \"wosri\", array(\"david@yahoo.com\"), array(\"d_orgmaster\", \"d_author\"))",
+    "warehouse_id": "<SQL_WAREHOUSE_ID>"
+  }'
+
+###
+
+curl -X GET "https://cloud.databricks.com/api/2.1/unity-catalog/schemas?catalog_name=ag_content_ims_udm_prod" \
+-H "Authorization: Bearer ----" 
+
+
+
+curl -X PATCH https://cloud.databricks.com/api/2.0/permissions/workspace \
+  -H "Authorization: Bearer ----" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "path": "/Shared/wosri/dap_shared",
+        "access_control_list": [
+          {
+            "user_name": "team@example.com",
+            "permission_level": "CAN_MANAGE"
+          }
+        ]
+      }'
