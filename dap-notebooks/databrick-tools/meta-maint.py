@@ -1800,6 +1800,8 @@ object {trait_name} {{
                         return (30, name)
                     if re.fullmatch(r".+_pguid", name):
                         return (40, name)
+                    if name in {"nuts_combo_key", "state_key", "territory_key", "country_key"}:
+                        return (45, name)
                     if re.fullmatch(r".+_key", name):
                         return (50, name)
                     if re.fullmatch(r".+_uid", name):
