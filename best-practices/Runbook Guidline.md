@@ -224,13 +224,13 @@ Include
 ### 📌 Must-Have Sections
 
 If you want the minimum effective runbook, include:
-✅ Purpose
-✅ Architecture
-✅ Schedule
-✅ Validation & error handling
-✅ How to rerun
-✅ How to recover failed data
-✅ Who to call
+- ✅ Purpose
+- ✅ Architecture
+- ✅ Schedule
+- ✅ Validation & error handling
+- ✅ How to rerun
+- ✅ How to recover failed data
+- ✅ Who to call
 
 
 
