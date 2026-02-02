@@ -1,7 +1,7 @@
  ## A Practical, Databricks-specific Runbook Outline
 
 
-Great question — a runbook is most useful when someone who didn’t build the system can operate, troubleshoot, and recover it at 2 a.m. 😄
+Great question — a runbook is most useful when someone who didn’t build the system can operate, troubleshoot, and recover it at. 😄
 Below is a practical, Databricks-specific runbook outline for a daily analytical data delivery system.
 
 
